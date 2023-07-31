@@ -16,6 +16,7 @@
 package com.android.nfc.cardemulation;
 
 import android.app.ActivityManager;
+import android.app.role.RoleManager;
 import android.content.ComponentName;
 import android.content.Context;
 import android.content.pm.ApplicationInfo;
@@ -71,7 +72,7 @@ import com.android.nfc.R;
  */
 public class CardEmulationManager implements RegisteredServicesCache.Callback,
         RegisteredNfcFServicesCache.Callback, PreferredServices.Callback,
-        EnabledNfcFServices.Callback {
+        EnabledNfcFServices.Callback, WalletRoleObserver.Callback {
     static final String TAG = "CardEmulationManager";
     static final boolean DBG = NfcProperties.debug_enabled().orElse(false);
 
@@ -99,6 +100,8 @@ public class CardEmulationManager implements RegisteredServicesCache.Callback,
     final HostEmulationManager mHostEmulationManager;
     final HostNfcFEmulationManager mHostNfcFEmulationManager;
     final PreferredServices mPreferredServices;
+
+    final WalletRoleObserver mWalletRoleObserver;
     final EnabledNfcFServices mEnabledNfcFServices;
     final Context mContext;
     final CardEmulationInterface mCardEmulationInterface;
@@ -119,6 +122,8 @@ public class CardEmulationManager implements RegisteredServicesCache.Callback,
         mNfcFCardEmulationInterface = new NfcFCardEmulationInterface();
         mForegroundUtils = ForegroundUtils.getInstance(
             context.getSystemService(ActivityManager.class));
+        mWalletRoleObserver = new WalletRoleObserver(context,
+                context.getSystemService(RoleManager.class), this);
         mAidCache = new RegisteredAidCache(context);
         mT3tIdentifiersCache = new RegisteredT3tIdentifiersCache(context);
         mHostEmulationManager = new HostEmulationManager(context, mAidCache);
@@ -134,8 +139,10 @@ public class CardEmulationManager implements RegisteredServicesCache.Callback,
         mRoutingOptionManager = RoutingOptionManager.getInstance();
         mOffHostRouteEse = mRoutingOptionManager.getOffHostRouteEse();
         mOffHostRouteUicc = mRoutingOptionManager.getOffHostRouteUicc();
-
         mForegroundUid = Process.INVALID_UID;
+        int currentUser = ActivityManager.getCurrentUser();
+        mAidCache.onWalletRoleHolderChanged(
+                mWalletRoleObserver.getDefaultWalletRoleHolder(currentUser), currentUser);
     }
 
     public INfcCardEmulation getNfcCardEmulationInterface() {
@@ -199,6 +206,7 @@ public class CardEmulationManager implements RegisteredServicesCache.Callback,
     }
 
     public void onUserSwitched(int userId) {
+        mWalletRoleObserver.onUserSwitched(userId);
         // for HCE
         mServiceCache.onUserSwitched();
         mPreferredServices.onUserSwitched(userId);
@@ -936,6 +944,11 @@ public class CardEmulationManager implements RegisteredServicesCache.Callback,
         } else {
             adapter.allowTransaction();
         }
+    }
+
+    @Override
+    public void onWalletRoleHolderChanged(String holder, int userId) {
+        mAidCache.onWalletRoleHolderChanged(holder, userId);
     }
 
     @Override
