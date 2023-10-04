@@ -922,4 +922,32 @@ public class NativeNfcTag implements TagEndpoint {
             }
         }
     }
+
+    @Override
+    public NdefMessage getNdef() {
+        Log.d(TAG, "getNdef: Searching for NfcCharging information");
+        int[] ndefinfo = new int[2];
+        int status;
+        NdefMessage ndefMsg = null;
+        status = checkNdefWithStatus(ndefinfo);
+        if (status != 0) {
+            Log.d(TAG, "Check NDEF Failed - status = " + status);
+            return ndefMsg;
+        }
+
+        byte[] buff = readNdef();
+        if (buff != null && buff.length > 0) {
+            try {
+                ndefMsg = new NdefMessage(buff);
+            } catch (FormatException e) {
+                // Create an intent anyway, without NDEF messages
+                ndefMsg = null;
+            }
+        } else if (buff != null) {
+            // Empty buffer, unformatted tags fall into this case
+            ndefMsg = null;
+        }
+
+        return ndefMsg;
+    }
 }

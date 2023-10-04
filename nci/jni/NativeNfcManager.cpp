@@ -26,6 +26,7 @@
 
 #include "HciEventManager.h"
 #include "JavaClassConstants.h"
+#include "NativeWlcManager.h"
 #include "NfcAdaptation.h"
 #ifdef DTA_ENABLED
 #include "NfcDta.h"
@@ -96,6 +97,7 @@ jmethodID gCachedNfcManagerNotifyRfFieldDeactivated;
 jmethodID gCachedNfcManagerNotifyEeUpdated;
 jmethodID gCachedNfcManagerNotifyHwErrorReported;
 jmethodID gCachedNfcManagerNotifyPollingLoopFrame;
+jmethodID gCachedNfcManagerNotifyWlcStopped;
 const char* gNativeP2pDeviceClassName =
     "com/android/nfc/dhimpl/NativeP2pDevice";
 const char* gNativeNfcTagClassName = "com/android/nfc/dhimpl/NativeNfcTag";
@@ -671,6 +673,9 @@ static jboolean nfcManager_initNativeStruc(JNIEnv* e, jobject o) {
   gCachedNfcManagerNotifyPollingLoopFrame =
       e->GetMethodID(cls.get(), "notifyPollingLoopFrame", "(I[B)V");
 
+  gCachedNfcManagerNotifyWlcStopped =
+      e->GetMethodID(cls.get(), "notifyWlcStopped", "(I)V");
+
   if (nfc_jni_cache_object(e, gNativeNfcTagClassName, &(nat->cached_NfcTag)) ==
       -1) {
     LOG(ERROR) << StringPrintf("%s: fail cache NativeNfcTag", __func__);
@@ -1201,6 +1206,7 @@ static jboolean nfcManager_doInitialize(JNIEnv* e, jobject o) {
         nativeNfcTag_registerNdefTypeHandler();
         NfcTag::getInstance().initialize(getNative(e, o));
         HciEventManager::getInstance().initialize(getNative(e, o));
+        NativeWlcManager::getInstance().initialize(getNative(e, o));
 
         /////////////////////////////////////////////////////////////////////////////////
         // Add extra configuration here (work-arounds, etc.)

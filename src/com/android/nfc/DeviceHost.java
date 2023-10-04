@@ -44,6 +44,8 @@ public interface DeviceHost {
         public void onHwErrorReported();
 
         public void onPollingLoopDetected(Bundle pollingFrame);
+
+        public void onWlcStopped(int wpt_end_condition);
     }
 
     public interface TagEndpoint {
@@ -69,6 +71,7 @@ public interface DeviceHost {
         byte[] readNdef();
         boolean writeNdef(byte[] data);
         NdefMessage findAndReadNdef();
+        NdefMessage getNdef();
         boolean formatNdef(byte[] key);
         boolean isNdefFormatable();
         boolean makeReadOnly();

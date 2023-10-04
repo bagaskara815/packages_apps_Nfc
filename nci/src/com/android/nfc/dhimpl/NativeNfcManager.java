@@ -457,4 +457,8 @@ public class NativeNfcManager implements DeviceHost {
         }
         mListener.onPollingLoopDetected(frame);
     }
+
+    private void notifyWlcStopped(int wpt_end_condition) {
+        mListener.onWlcStopped(wpt_end_condition);
+    }
 }
