@@ -111,6 +111,11 @@ custom_bootclasspath_fragment {
         "android-non-updatable",
     ],
     hidden_api: {
+        // Additional hidden API flag files to override the defaults. This must only be
+        // modified by the Soong or platform compat team.
+        max_target_o_low_priority: ["hiddenapi/hiddenapi-max-target-o.txt"],
+        max_target_r_low_priority: ["hiddenapi/hiddenapi-max-target-r-loprio.txt"],
+
         // The following packages contain classes from other modules on the
         // bootclasspath. That means that the hidden API flags for this module
         // has to explicitly list every single class this module provides in
