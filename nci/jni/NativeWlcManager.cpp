@@ -53,7 +53,7 @@ Mutex gMutexWlc;
 
 const JNINativeMethod NativeWlcManager::sMethods[] = {
 
-    {"startWlcPowerTransfert", "(II)Z",
+    {"startWlcPowerTransfer", "(II)Z",
      (void*)NativeWlcManager::com_android_nfc_wlc_chargeWlcListener},
     {"enableWlc", "(I)Z",
      (void*)NativeWlcManager::com_android_nfc_wlc_startWlcP},

@@ -191,7 +191,7 @@ public interface DeviceHost {
 
     boolean disableScreenOffSuspend();
 
-    public void doSetScreenState(int screen_state_mask);
+    public void doSetScreenState(int screen_state_mask, boolean alwaysPoll);
 
     public int getNciVersion();
 
@@ -235,4 +235,6 @@ public interface DeviceHost {
      * Enable or Disable the Power Saving Mode based on flag
      */
     boolean setPowerSavingMode(boolean flag);
+
+    boolean isMultiTag();
 }

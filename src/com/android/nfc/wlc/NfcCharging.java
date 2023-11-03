@@ -24,6 +24,7 @@ import android.nfc.NdefMessage;
 import android.nfc.NdefRecord;
 import android.nfc.NfcAdapter;
 import android.os.Bundle;
+import android.sysprop.NfcProperties;
 import android.util.Log;
 
 import com.android.nfc.DeviceHost;
@@ -36,43 +37,39 @@ import java.util.HashMap;
 import java.util.Map;
 
 public class NfcCharging {
-    static final boolean DBG = true;
+    static final boolean DBG = NfcProperties.debug_enabled().orElse(false);
     private static final String TAG = "NfcWlcChargingActivity";
 
-    final String VERSION = "1.0.0";
+    static final String VERSION = "1.0.0";
 
     private Context mContext;
-    public final byte[] WLCCAP = {0x57, 0x4c, 0x43, 0x43, 0x41, 0x50};
-    public final byte[] WLCCTL = {0x57, 0x4c, 0x43, 0x43, 0x54, 0x4C};
-    public final byte[] WLCSTAI = {0x57, 0x4c, 0x43, 0x53, 0x54, 0x41, 0x49};
-    public final byte[] USIWLC = {0x75, 0x73, 0x69, 0x3A, 0x77, 0x6C, 0x63};
-    public final byte[] WLCPI = {0x57, 0x4c, 0x43, 0x49, 0x4e, 0x46};
+    public static final byte[] WLCCAP = {0x57, 0x4c, 0x43, 0x43, 0x41, 0x50};
+    public static final byte[] WLCCTL = {0x57, 0x4c, 0x43, 0x43, 0x54, 0x4C};
+    public static final byte[] WLCSTAI = {0x57, 0x4c, 0x43, 0x53, 0x54, 0x41, 0x49};
+    public static final byte[] USIWLC = {0x75, 0x73, 0x69, 0x3A, 0x77, 0x6C, 0x63};
+    public static final byte[] WLCPI = {0x57, 0x4c, 0x43, 0x49, 0x4e, 0x46};
 
-    public final String BatteryLevel = "Battery Level";
-    public final String ReceivePower = "Receive Power";
-    public final String ReceiveVoltage = "Receive Voltage";
-    public final String ReceiveCurrent = "Receive Current";
-    public final String TemperatureBattery = "Temperature Battery";
-    public final String TemperatureListener = "Temperature Listener";
+    public static final String BatteryLevel = "Battery Level";
+    public static final String ReceivePower = "Receive Power";
+    public static final String ReceiveVoltage = "Receive Voltage";
+    public static final String ReceiveCurrent = "Receive Current";
+    public static final String TemperatureBattery = "Temperature Battery";
+    public static final String TemperatureListener = "Temperature Listener";
+    public static final String VendorId = "Vendor Id";
+    public static final String State = "State";
+    public static final int DISCONNECTED = 0;
+    public static final int CONNECTED_NOT_CHARGING = 1;
+    public static final int CONNECTED_CHARGING = 2;
 
-    final byte MODE_REQ_STATIC = 0;
-    final byte MODE_REQ_NEGOTIATED = 1;
-    final byte MODE_REQ_BATTERY_FULL = 2;
+    static final byte MODE_REQ_STATIC = 0;
+    static final byte MODE_REQ_NEGOTIATED = 1;
+    static final byte MODE_REQ_BATTERY_FULL = 2;
 
-    final int MODE_NON_AUTONOMOUS_WLCP = 0;
+    static final int MODE_NON_AUTONOMOUS_WLCP = 0;
 
     int mWatchdogTimeout = 1;
-    int fake_count = 0;
-    int ldoValueWpt = 0;
-    int ldoValueDpc = 18;
-    int RFOiSetting = 0;
-    double vdd_rf_dpc = 0;
-    double vdd_tx = 0;
-    double vov_wpt = 5100;
-    final int mRFOSettingMin = 64;
-    final int mRload = 7;
-    byte mSaveReadArray = 0x0f;
-    int mSavemodeBitmap = 0x07;
+    int mUpdatedBatteryLevel = -1;
+    int mLastState = -1;
 
     int WLCState = 0;
 
@@ -115,24 +112,20 @@ public class NfcCharging {
 
     // WLCINF
     int Ptx = 100;
-    double mPower = 0;
-    double mNewPower = 0;
-
-    BigDecimal mPA_Factor = new BigDecimal("1");
 
     // state machine
-    private final int STATE_2 = 0; // Read WLC_CAP
-    private final int STATE_6 = 1; // Static WPT
-    private final int STATE_8 = 2; // Handle NEGO_WAIT
-    private final int STATE_11 = 3; // Write WLCP_INFO
-    private final int STATE_12 = 4; // Read WLCL_CTL
-    private final int STATE_16 = 5; // Read confirmation
-    private final int STATE_17 = 6; // Check WPT requested
-    private final int STATE_21 = 7; // Handle WPT
-    private final int STATE_22 = 8; // Handle INFO_REQ
-    private final int STATE_24 = 9; // Handle removal detection
-    private final int STATE_21_1 = 10; // Handle WPT time completed
-    private final int STATE_21_2 = 11; // Handle FOD detection/removal
+    private static final int STATE_2 = 0; // Read WLC_CAP
+    private static final int STATE_6 = 1; // Static WPT
+    private static final int STATE_8 = 2; // Handle NEGO_WAIT
+    private static final int STATE_11 = 3; // Write WLCP_INFO
+    private static final int STATE_12 = 4; // Read WLCL_CTL
+    private static final int STATE_16 = 5; // Read confirmation
+    private static final int STATE_17 = 6; // Check WPT requested
+    private static final int STATE_21 = 7; // Handle WPT
+    private static final int STATE_22 = 8; // Handle INFO_REQ
+    private static final int STATE_24 = 9; // Handle removal detection
+    private static final int STATE_21_1 = 10; // Handle WPT time completed
+    private static final int STATE_21_2 = 11; // Handle FOD detection/removal
 
     private DeviceHost mNativeNfcManager;
     NdefMessage mNdefMessage;
@@ -149,7 +142,7 @@ public class NfcCharging {
 
     Map<String, Integer> WlcDeviceInfo = new HashMap<>();
 
-    private native boolean startWlcPowerTransfert(int power_adj_req, int wpt_time_int);
+    private native boolean startWlcPowerTransfer(int power_adj_req, int wpt_time_int);
 
     private native boolean enableWlc(int enable);
 
@@ -189,12 +182,16 @@ public class NfcCharging {
         WlcCtl_ReceiveVoltage = -1;
         WlcCtl_TemperatureBattery = -1;
         WlcCtl_TemperatureWlcl = -1;
+        mUpdatedBatteryLevel = -1;
+        mLastState = -1;
         WlcDeviceInfo.put(BatteryLevel, -1);
         WlcDeviceInfo.put(ReceivePower, -1);
         WlcDeviceInfo.put(ReceiveVoltage, -1);
         WlcDeviceInfo.put(ReceiveCurrent, -1);
         WlcDeviceInfo.put(TemperatureBattery, -1);
         WlcDeviceInfo.put(TemperatureListener, -1);
+        WlcDeviceInfo.put(VendorId, -1);
+        WlcDeviceInfo.put(State, -1);
 
         WlcCtl_ErrorFlag = 0;
         mFirstOccurrence = true;
@@ -216,11 +213,6 @@ public class NfcCharging {
                 }
             };
 
-    public void setPowerAdjustmentFactor() {
-        if (DBG) Log.d(TAG, "setPowerAdjustmentFactor: enter");
-        if (DBG) Log.d(TAG, "PA_Factor = " + mPA_Factor);
-    }
-
     public boolean startNfcCharging(TagEndpoint t) {
         if (DBG) Log.d(TAG, "startNfcCharging " + VERSION);
         boolean NfcChargingEnabled = false;
@@ -239,11 +231,35 @@ public class NfcCharging {
         }
     }
 
+    public void stopNfcCharging() {
+        if (DBG) Log.d(TAG, "stopNfcCharging " + VERSION);
+
+        NfcChargingOnGoing = false;
+        resetInternalValues();
+
+        mLastState = DISCONNECTED;
+        WlcDeviceInfo.put(State, mLastState);
+        NfcService.getInstance().onWlcData(WlcDeviceInfo);
+        disconnectPresenceCheck();
+
+        NfcChargingMode = false;
+
+        // Restart the polling loop
+
+        TagHandler.disconnect();
+        // Disable discovery and restart polling loop only if not screen state change pending
+        if (!NfcService.getInstance().sendScreenMessageAfterNfcCharging()) {
+            if (DBG) Log.d(TAG, "No pending screen state change, stop Nfc charging presence check");
+            stopNfcChargingPresenceChecking();
+        }
+    }
+
     public boolean checkWlcCapMsg(NdefMessage ndefMsg) {
         if (DBG) Log.d(TAG, "checkWlcCapMsg: enter");
         boolean status = true;
         NdefRecord[] ndefRecords = null;
-        long DeviceId = 0;
+        long mDeviceId = 0;
+        int mVendorId = 0;
         Byte ControlByte = 0;
         if (ndefMsg != null) {
             mNdefMessage = ndefMsg;
@@ -325,11 +341,16 @@ public class NfcCharging {
                                                 + " length = "
                                                 + mNdefPayload2.length);
 
-                            for (int j = 0; j < mNdefPayload2.length; j++) {
-                                DeviceId <<= 8;
-                                DeviceId |= (mNdefPayload2[j] & 0xFF);
+                            if (mNdefPayload2.length > 8) {
+                                mVendorId = (mNdefPayload2[8] << 8 | mNdefPayload2[7]) >> 4;
+                                Log.d(TAG, "VendorId = " + Integer.toHexString(mVendorId));
+                                WlcDeviceInfo.put(VendorId, mVendorId);
+                                mDeviceId = (long) ((mNdefPayload2[7] & 0x0F)) << 48;
+                                for (int j = 6; j > 0; j--) {
+                                    mDeviceId |= (long) (mNdefPayload2[j] & 0xFF) << ((j - 1) * 8);
+                                }
+                                if (DBG) Log.d(TAG, "DeviceId = " + Long.toHexString(mDeviceId));
                             }
-                            if (DBG) Log.d(TAG, "DeviceId = " + Long.toHexString(DeviceId));
                         }
                     }
                 }
@@ -338,7 +359,10 @@ public class NfcCharging {
         } else {
             status = false;
         }
-        NfcService.getInstance().onWlcData(WlcDeviceInfo);
+        if (WlcDeviceInfo.get(BatteryLevel) > (mUpdatedBatteryLevel + 5)) {
+            NfcService.getInstance().onWlcData(WlcDeviceInfo);
+            mUpdatedBatteryLevel = WlcDeviceInfo.get(BatteryLevel);
+        }
         if (DBG) Log.d(TAG, "checkWlcCapMsg: exit, status = " + status);
         return status;
     }
@@ -393,12 +417,11 @@ public class NfcCharging {
 
             if (DBG) Log.d(TAG, "checkWlcCtlMsg WlcCtl_PowerAdjReq = " + WlcCtl_PowerAdjReq);
 
-            WlcCtl_BatteryLevel = mNdefPayload[3];
-            if ((WlcCtl_BatteryLevel > 0x64) || (WlcCtl_BatteryStatus != 0x1))
-                WlcCtl_BatteryLevel = 0xFF;
-
-            if (DBG) Log.d(TAG, "checkWlcCtlMsg WlcCtl_BatteryLevel = " + WlcCtl_BatteryLevel);
-            WlcDeviceInfo.put(BatteryLevel, WlcCtl_BatteryLevel);
+            if ((mNdefPayload[3] < 0x64) && (WlcCtl_BatteryStatus == 0x1)) {
+                WlcCtl_BatteryLevel = mNdefPayload[3];
+                WlcDeviceInfo.put(BatteryLevel, WlcCtl_BatteryLevel);
+                if (DBG) Log.d(TAG, "checkWlcCtlMsg WlcCtl_BatteryLevel = " + WlcCtl_BatteryLevel);
+            }
 
             if (mNdefPayload[5] > 0xF) {
                 WlcCtl_HoldOffWt = 0xF;
@@ -425,7 +448,10 @@ public class NfcCharging {
             status = false;
         }
 
-        NfcService.getInstance().onWlcData(WlcDeviceInfo);
+        if (WlcDeviceInfo.get(BatteryLevel) > (mUpdatedBatteryLevel + 5)) {
+            NfcService.getInstance().onWlcData(WlcDeviceInfo);
+            mUpdatedBatteryLevel = WlcDeviceInfo.get(BatteryLevel);
+        }
         if (DBG) Log.d(TAG, "checkWlcCtlMsg status = " + status);
         return status;
     }
@@ -614,6 +640,9 @@ public class NfcCharging {
                                     + NfcChargingOnGoing);
                 resetInternalValues();
             }
+            mLastState = DISCONNECTED;
+            WlcDeviceInfo.put(State, mLastState);
+            NfcService.getInstance().onWlcData(WlcDeviceInfo);
             disconnectPresenceCheck();
             if (DBG) Log.d(TAG, "disconnectPresenceCheck done");
 
@@ -658,6 +687,11 @@ public class NfcCharging {
                         Log.d(
                                 TAG,
                                 "HandleWLCState: STATE_2 (" + convert_state_2_str(STATE_2) + ")");
+                    if (mLastState != CONNECTED_CHARGING) {
+                        mLastState = CONNECTED_CHARGING;
+                        WlcDeviceInfo.put(State, mLastState);
+                        NfcService.getInstance().onWlcData(WlcDeviceInfo);
+                    }
                     if (TagHandler != null) {
                         if (!mFirstOccurrence) {
                             mNdefMessage = TagHandler.getNdef();
@@ -688,10 +722,16 @@ public class NfcCharging {
                                 wt = TCapWt;
 
                                 WLCState = STATE_24;
+                                WlcDeviceInfo.put(BatteryLevel, 0x64);
+                                mUpdatedBatteryLevel = WlcDeviceInfo.get(BatteryLevel);
+                                WlcDeviceInfo.put(State, mLastState);
+                                mLastState = CONNECTED_NOT_CHARGING;
+                                NfcService.getInstance().onWlcData(WlcDeviceInfo);
                                 if (DBG) Log.d(TAG, " Battery full");
                                 break;
 
-                            } else if (WlcCap_ModeReq == MODE_REQ_STATIC) {
+                            } else if (WlcCap_ModeReq == MODE_REQ_STATIC
+                                    || mNativeNfcManager.isMultiTag() == true) {
                                 if (DBG) Log.d(TAG, " Static mode");
                                 wt = 0; // TCapWt;
 
@@ -725,7 +765,7 @@ public class NfcCharging {
 
                     WLCState = STATE_2;
                     wt = TCapWt + 5000;
-                    startWlcPowerTransfert(WlcCtl_PowerAdjReq, WlcCap_CapWt);
+                    startWlcPowerTransfer(WlcCtl_PowerAdjReq, WlcCap_CapWt);
                     break;
                 }
 
@@ -897,7 +937,7 @@ public class NfcCharging {
                                 TAG,
                                 "HandleWLCState: STATE_21 (" + convert_state_2_str(STATE_21) + ")");
 
-                    startWlcPowerTransfert(WlcCtl_PowerAdjReq, WlcCtl_WptDuration);
+                    startWlcPowerTransfer(WlcCtl_PowerAdjReq, WlcCtl_WptDuration);
                     WLCState = STATE_22;
                     wt = TWptDuration + 5000;
                     break;

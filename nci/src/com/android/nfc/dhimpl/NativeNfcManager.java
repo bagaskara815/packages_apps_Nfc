@@ -201,7 +201,7 @@ public class NativeNfcManager implements DeviceHost {
     public native int getLfT3tMax();
 
     @Override
-    public native void doSetScreenState(int screen_state_mask);
+    public native void doSetScreenState(int screen_state_mask, boolean alwaysPoll);
 
     @Override
     public native int getNciVersion();
@@ -355,6 +355,8 @@ public class NativeNfcManager implements DeviceHost {
 
     @Override
     public native int getMaxRoutingTableSize();
+
+    public native boolean isMultiTag();
 
     /** Notifies Ndef Message (TODO: rename into notifyTargetDiscovered) */
     private void notifyNdefMessageListeners(NativeNfcTag tag) {

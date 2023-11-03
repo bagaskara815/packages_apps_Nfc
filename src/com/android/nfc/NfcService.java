@@ -353,6 +353,7 @@ public class NfcService implements DeviceHostListener, ForegroundUtils.Callback 
     boolean mIsWlcCapable;
     boolean mIsWlcEnabled;
     boolean mIsRWCapable;
+    WlcLDeviceInfo mWlcLDeviceInfo;
 
     // polling delay control variables
     private final int mPollDelayTime;
@@ -505,6 +506,20 @@ public class NfcService implements DeviceHostListener, ForegroundUtils.Callback 
     public void onWlcData(Map<String, Integer> WlcDeviceInfo) {
         for (String key : WlcDeviceInfo.keySet()) {
             Log.d(TAG, " onWlcData  " + key + " =  " + WlcDeviceInfo.get(key));
+        }
+        synchronized (mWlcStateListener) {
+            mWlcLDeviceInfo = new WlcLDeviceInfo(
+                    WlcDeviceInfo.get(mNfcCharging.VendorId),
+                    WlcDeviceInfo.get(mNfcCharging.TemperatureListener),
+                    WlcDeviceInfo.get(mNfcCharging.BatteryLevel),
+                    WlcDeviceInfo.get(mNfcCharging.State));
+            for (INfcWlcStateListener listener : mWlcStateListener) {
+                try {
+                    listener.onWlcStateChanged(mWlcLDeviceInfo);
+                } catch (RemoteException e) {
+                    Log.e(TAG, "error in onWlcData");
+                }
+            }
         }
     }
 
@@ -1160,7 +1175,7 @@ public class NfcService implements DeviceHostListener, ForegroundUtils.Callback 
             if(mNfcUnlockManager.isLockscreenPollingEnabled())
                 applyRouting(false);
 
-            mDeviceHost.doSetScreenState(screen_state_mask);
+            mDeviceHost.doSetScreenState(screen_state_mask, mIsWlcEnabled);
 
             sToast_debounce = false;
 
@@ -1884,9 +1899,8 @@ public class NfcService implements DeviceHostListener, ForegroundUtils.Callback 
 
         @Override
         public WlcLDeviceInfo getWlcLDeviceInfo() {
-            // TODO
             synchronized (NfcService.this) {
-                return null;
+                return mWlcLDeviceInfo;
             }
         }
 
@@ -3212,7 +3226,7 @@ public class NfcService implements DeviceHostListener, ForegroundUtils.Callback 
                             applyRouting(false);
                         }
 
-                        mDeviceHost.doSetScreenState(screen_state_mask);
+                        mDeviceHost.doSetScreenState(screen_state_mask, mIsWlcEnabled);
                     } finally {
                         mRoutingWakeLock.release();
                     }
