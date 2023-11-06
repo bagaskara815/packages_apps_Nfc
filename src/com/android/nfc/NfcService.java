@@ -152,6 +152,9 @@ public class NfcService implements DeviceHostListener, ForegroundUtils.Callback 
     static final String PREF_NFC_READER_OPTION_ON = "nfc_reader_on";
     static final boolean NFC_READER_OPTION_DEFAULT = true;
 
+    static final String PREF_NFC_CHARGING_ON = "nfc_charging_on";
+    static final boolean NFC_CHARGING_ON_DEFAULT = true;
+
     static final String PREF_SECURE_NFC_ON = "secure_nfc_on";
     static final boolean SECURE_NFC_ON_DEFAULT = false;
     static final String PREF_FIRST_BOOT = "first_boot";
@@ -694,6 +697,7 @@ public class NfcService implements DeviceHostListener, ForegroundUtils.Callback 
                 pm.hasSystemFeature(PackageManager.FEATURE_NFC_CHARGING);
         if (mIsWlcCapable) {
             mNfcCharging = new NfcCharging(mContext, mDeviceHost);
+            mIsWlcEnabled = mPrefs.getBoolean(PREF_NFC_CHARGING_ON, NFC_CHARGING_ON_DEFAULT);
         }
 
         mIsHceCapable =
@@ -1884,7 +1888,10 @@ public class NfcService implements DeviceHostListener, ForegroundUtils.Callback 
                 if (!mIsWlcCapable || !isNfcEnabled()) {
                     return false;
                 }
+                mPrefsEditor.putBoolean(PREF_NFC_CHARGING_ON, enable);
+                mPrefsEditor.apply();
                 mIsWlcEnabled = enable;
+                mBackupManager.dataChanged();
             }
             return true;
         }
