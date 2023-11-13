@@ -75,6 +75,7 @@ import android.os.Handler;
 import android.os.IBinder;
 import android.os.Message;
 import android.os.PowerManager;
+import android.os.PowerManager.OnThermalStatusChangedListener;
 import android.os.Process;
 import android.os.RemoteException;
 import android.os.ServiceManager;
@@ -698,6 +699,8 @@ public class NfcService implements DeviceHostListener, ForegroundUtils.Callback 
         if (mIsWlcCapable) {
             mNfcCharging = new NfcCharging(mContext, mDeviceHost);
             mIsWlcEnabled = mPrefs.getBoolean(PREF_NFC_CHARGING_ON, NFC_CHARGING_ON_DEFAULT);
+            // Register ThermalStatusChangedListener
+            addThermalStatusListener();
         }
 
         mIsHceCapable =
@@ -2659,6 +2662,42 @@ public class NfcService implements DeviceHostListener, ForegroundUtils.Callback 
             }
         }
     };
+
+    private void addThermalStatusListener() {
+        try {
+            if (mPowerManager != null) {
+                mPowerManager.addThermalStatusListener(mContext.getMainExecutor(),
+                        mOnThermalStatusChangedListener);
+            }
+        } catch (Exception e) {
+            Log.e(TAG, "Exception in addThermalStatusListener " + e);
+        }
+    }
+
+    /**
+     * Receives Thermal state updates
+     */
+    private OnThermalStatusChangedListener mOnThermalStatusChangedListener =
+            new OnThermalStatusChangedListener() {
+        @Override
+        public void onThermalStatusChanged(int status) {
+            switch (status) {
+                case PowerManager.THERMAL_STATUS_MODERATE:
+                    Log.d(TAG, "Thermal status changed to MODERATE");
+                    break;
+                case PowerManager.THERMAL_STATUS_SEVERE:
+                    Log.d(TAG, "Thermal status changed to SEVERE");
+                    break;
+                case PowerManager.THERMAL_STATUS_CRITICAL:
+                    Log.d(TAG, "Thermal status changed to CRITICAL");
+                    break;
+                default:
+                    Log.d(TAG, "Unknown thermal status: " + status);
+                    break;
+            }
+        }
+    };
+
 
     /**
      * Read mScreenState and apply NFC-C polling and NFC-EE routing
