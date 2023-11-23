@@ -694,7 +694,7 @@ public class NfcService implements DeviceHostListener, ForegroundUtils.Callback 
         updatePackageCache();
 
         mIsRWCapable = pm.hasSystemFeature(PackageManager.FEATURE_NFC);
-        mIsWlcCapable =
+        mIsWlcCapable = android.nfc.Flags.enableNfcCharging() &&
                 pm.hasSystemFeature(PackageManager.FEATURE_NFC_CHARGING);
         if (mIsWlcCapable) {
             mNfcCharging = new NfcCharging(mContext, mDeviceHost);
@@ -1883,12 +1883,15 @@ public class NfcService implements DeviceHostListener, ForegroundUtils.Callback 
 
         @Override
         public boolean enableWlc(boolean enable) {
+            if (!mIsWlcCapable) {
+                return false;
+            }
             NfcPermissions.enforceAdminPermissions(mContext);
             // enable or disable WLC
             if (DBG) Log.d(TAG, "enableWlc: " + enable);
             synchronized (NfcService.this) {
-                // check whether it is WlcCapable device and NFC is enabled
-                if (!mIsWlcCapable || !isNfcEnabled()) {
+                // check whether NFC is enabled
+                if (!isNfcEnabled()) {
                     return false;
                 }
                 mPrefsEditor.putBoolean(PREF_NFC_CHARGING_ON, enable);
@@ -1901,6 +1904,9 @@ public class NfcService implements DeviceHostListener, ForegroundUtils.Callback 
 
         @Override
         public boolean isWlcEnabled() throws RemoteException {
+            if (!mIsWlcCapable) {
+                return false;
+            }
             // check whether WLC is enabled or disabled
             synchronized (NfcService.this) {
                 return mIsWlcEnabled;
@@ -1909,6 +1915,9 @@ public class NfcService implements DeviceHostListener, ForegroundUtils.Callback 
 
         @Override
         public WlcLDeviceInfo getWlcLDeviceInfo() {
+            if (!mIsWlcCapable) {
+                return null;
+            }
             synchronized (NfcService.this) {
                 return mWlcLDeviceInfo;
             }
@@ -2087,8 +2096,10 @@ public class NfcService implements DeviceHostListener, ForegroundUtils.Callback 
         @Override
         public void registerWlcStateListener(
                 INfcWlcStateListener listener) throws RemoteException {
+            if (!mIsWlcCapable) {
+                return;
+            }
             NfcPermissions.enforceAdminPermissions(mContext);
-            if (!mIsWlcCapable) return;
 
             mWlcStateListener.add(listener);
         }
@@ -2096,8 +2107,10 @@ public class NfcService implements DeviceHostListener, ForegroundUtils.Callback 
         @Override
         public void unregisterWlcStateListener(
                 INfcWlcStateListener listener) throws RemoteException {
+            if (!mIsWlcCapable) {
+                return;
+            }
             NfcPermissions.enforceAdminPermissions(mContext);
-            if (!mIsWlcCapable) return;
 
             mWlcStateListener.remove(listener);
         }
@@ -2657,8 +2670,8 @@ public class NfcService implements DeviceHostListener, ForegroundUtils.Callback 
             new KeyguardLockedStateListener() {
         @Override
         public void onKeyguardLockedStateChanged(boolean isKeyguardLocked) {
-           if (mNfcCharging.NfcChargingOnGoing == false) {
-              applyScreenState(mScreenStateHelper.checkScreenState());
+            if (!mIsWlcCapable || !mNfcCharging.NfcChargingOnGoing) {
+                applyScreenState(mScreenStateHelper.checkScreenState());
             }
         }
     };
@@ -3668,7 +3681,7 @@ public class NfcService implements DeviceHostListener, ForegroundUtils.Callback 
                     || action.equals(Intent.ACTION_USER_PRESENT)) {
                 // Perform applyRouting() in AsyncTask to serialize blocking calls
 
-                if (mNfcCharging.NfcChargingOnGoing == true) {
+                if (mIsWlcCapable && mNfcCharging.NfcChargingOnGoing) {
                     Log.d(TAG,
                         "MSG_APPLY_SCREEN_STATE postponing due to a charging pier device");
                     mPendingPowerStateUpdate = true;
