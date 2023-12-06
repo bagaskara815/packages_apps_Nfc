@@ -54,6 +54,7 @@ import android.nfc.INfcAdapter;
 import android.nfc.INfcAdapterExtras;
 import android.nfc.INfcCardEmulation;
 import android.nfc.INfcControllerAlwaysOnListener;
+import android.nfc.INfcVendorNciCallback;
 import android.nfc.INfcDta;
 import android.nfc.INfcFCardEmulation;
 import android.nfc.INfcTag;
@@ -137,6 +138,14 @@ import java.util.Scanner;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.FutureTask;
+import java.util.concurrent.TimeoutException;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Executor;
+import java.util.concurrent.ExecutorService;
+
+import java.util.concurrent.TimeUnit;
 
 public class NfcService implements DeviceHostListener, ForegroundUtils.Callback {
     static final boolean DBG = NfcProperties.debug_enabled().orElse(false);
@@ -262,6 +271,15 @@ public class NfcService implements DeviceHostListener, ForegroundUtils.Callback 
 
     private static final VibrationAttributes HARDWARE_FEEDBACK_VIBRATION_ATTRIBUTES =
             VibrationAttributes.createForUsage(VibrationAttributes.USAGE_HARDWARE_FEEDBACK);
+
+    private static final int NCI_STATUS_OK = 0x00;
+    private static final int NCI_STATUS_REJECTED = 0x01;
+    private static final int NCI_STATUS_MESSAGE_CORRUPTED = 0x02;
+    private static final int NCI_STATUS_FAILED = 0x03;
+    private static final int SEND_VENDOR_CMD_TIMEOUT_MS = 3000;
+    private static final int NCI_GID_PROP = 0x0F;
+    private static final int NCI_MSG_PROP_ANDROID = 0x0C;
+    private static final int NCI_MSG_PROP_ANDROID_POWER_SAVING = 0x01;
 
     private final UserManager mUserManager;
     private final ActivityManager mActivityManager;
@@ -415,6 +433,8 @@ public class NfcService implements DeviceHostListener, ForegroundUtils.Callback 
     private final FeatureFlags mFeatureFlags = new com.android.nfc.flags.FeatureFlagsImpl();
     private final Set<INfcWlcStateListener> mWlcStateListener =
             Collections.synchronizedSet(new HashSet<>());
+
+    private  INfcVendorNciCallback mNfcVendorNciCallBack = null;
 
     public static NfcService getInstance() {
         return sService;
@@ -2217,6 +2237,74 @@ public class NfcService implements DeviceHostListener, ForegroundUtils.Callback 
                     err.getFileDescriptor(), args);
         }
 
+        private static boolean isPowerSavingModeCmd(int gid, int oid, byte[] payload) {
+            return gid == NCI_GID_PROP && oid == NCI_MSG_PROP_ANDROID && payload.length > 0
+                    && payload[0] == NCI_MSG_PROP_ANDROID_POWER_SAVING;
+        }
+
+        @Override
+        public synchronized int sendVendorNciMessage(int mt, int gid, int oid, byte[] payload)
+                throws RemoteException {
+            NfcPermissions.enforceAdminPermissions(mContext);
+            if ((!isNfcEnabled() && !mIsPowerSavingModeEnabled)) {
+                Log.e(TAG, "sendRawVendor : Nfc is not enabled");
+                return NCI_STATUS_FAILED;
+            }
+
+            FutureTask<Integer> sendVendorCmdTask = new FutureTask<>(
+                () -> {
+                   if(isPowerSavingModeCmd(gid, oid, payload)) {
+                        boolean status = setPowerSavingMode(payload[1] == 0x01 ? true : false);
+                        return status? NCI_STATUS_OK : NCI_STATUS_FAILED;
+                    } else {
+                       NfcVendorNciResponse response =
+                               mDeviceHost.sendRawVendorCmd(mt, gid, oid, payload);
+                       if (response.status == NCI_STATUS_OK) {
+                           sendVendorNciResponse(response.gid, response.oid, response.payload);
+                       }
+                       return Integer.valueOf(response.status);
+                   }
+                });
+            int status = NCI_STATUS_FAILED;
+            try {
+                status = runTaskOnSingleThreadExecutor(sendVendorCmdTask,
+                        SEND_VENDOR_CMD_TIMEOUT_MS);
+            } catch (TimeoutException e) {
+                Log.e(TAG, "Failed to send vendor command - status : TIMEOUT", e);
+            } catch (InterruptedException e) {
+                e.printStackTrace();
+            } catch (ExecutionException e) {
+                e.printStackTrace();
+            }
+            return status;
+        }
+
+        @Override
+        public void registerVendorExtensionCallback(INfcVendorNciCallback callbacks)
+                throws RemoteException {
+            if (DBG) Log.i(TAG, "Register the callback");
+            NfcPermissions.enforceAdminPermissions(mContext);
+            mNfcVendorNciCallBack = callbacks;
+        }
+
+        @Override
+        public void unregisterVendorExtensionCallback(INfcVendorNciCallback callbacks)
+                throws RemoteException {
+            if (DBG) Log.i(TAG, "Unregister the callback");
+            NfcPermissions.enforceAdminPermissions(mContext);
+            mNfcVendorNciCallBack = null;
+        }
+    }
+
+    private void sendVendorNciResponse(int gid, int oid, byte[] payload) {
+        if (DBG) Log.i(TAG, "onVendorNciResponseReceived");
+        if (mNfcVendorNciCallBack != null) {
+            try {
+                mNfcVendorNciCallBack.onVendorResponseReceived(gid, oid, payload);
+            } catch (RemoteException e) {
+                Log.e(TAG, "Failed to send vendor response", e);
+            }
+        }
     }
 
     final class SeServiceDeathRecipient implements IBinder.DeathRecipient {
@@ -4160,6 +4248,18 @@ public class NfcService implements DeviceHostListener, ForegroundUtils.Callback 
             proto.write(NfcServiceDumpProto.NATIVE_CRASH_LOGS, logs);
         } catch (IOException e) {
             Log.e(TAG, "IOException in dumpDebug(ProtoOutputStream): " + e);
+        }
+    }
+
+    private int runTaskOnSingleThreadExecutor(FutureTask<Integer> task, int timeoutMs)
+            throws InterruptedException, TimeoutException, ExecutionException {
+        ExecutorService executor = Executors.newSingleThreadExecutor();
+        executor.submit(task);
+        try {
+            return task.get(timeoutMs, TimeUnit.MILLISECONDS);
+        } catch (TimeoutException e) {
+            executor.shutdownNow();
+            throw e;
         }
     }
 }

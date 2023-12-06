@@ -247,4 +247,8 @@ public interface DeviceHost {
     */
     void setDiscoveryTech(int pollTech, int listenTech);
     void resetDiscoveryTech();
+    /**
+     * Sends Vendor NCI command
+     */
+    NfcVendorNciResponse sendRawVendorCmd(int mt, int gid, int oid, byte[] payload);
 }
