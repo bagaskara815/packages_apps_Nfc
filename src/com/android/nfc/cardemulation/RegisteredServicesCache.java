@@ -464,7 +464,7 @@ public class RegisteredServicesCache {
                 } else {
                     Log.d(TAG, "Existed other service");
                 }
-                service.setOtherServiceEnabled(status.checked);
+                service.setCategoryOtherServiceEnabled(status.checked);
                 userServices.others.put(component, status);
             }
 
@@ -1019,12 +1019,12 @@ public class RegisteredServicesCache {
             return false;
         }
 
-        if (service.isOtherServiceEnabled() == checked) {
+        if (service.isCategoryOtherServiceEnabled() == checked) {
             Log.d(TAG, "already same status: " + checked);
             return false;
         }
 
-        service.setOtherServiceEnabled(checked);
+        service.setCategoryOtherServiceEnabled(checked);
         status.checked = checked;
 
         return writeOthersLocked();
