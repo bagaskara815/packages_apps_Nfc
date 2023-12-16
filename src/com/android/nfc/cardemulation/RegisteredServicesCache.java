@@ -443,6 +443,8 @@ public class RegisteredServicesCache {
             Log.i(TAG, "current user: " + ActivityManager.getCurrentUser() +
                     ", is managed profile : " + isManagedProfile );
             boolean isChecked = !(isManagedProfile);
+            // TODO: b/313040065 temperatory set isChecked always true due to there's no UI in AOSP
+            isChecked = true;
 
             for (ApduServiceInfo service : validOtherServices) {
                 Log.d(TAG, "update valid otherService: " + service.getComponent()
@@ -462,7 +464,7 @@ public class RegisteredServicesCache {
                 } else {
                     Log.d(TAG, "Existed other service");
                 }
-                service.setOtherServiceEnabled(status.checked);
+                service.setCategoryOtherServiceEnabled(status.checked);
                 userServices.others.put(component, status);
             }
 
@@ -1017,12 +1019,12 @@ public class RegisteredServicesCache {
             return false;
         }
 
-        if (service.isOtherServiceEnabled() == checked) {
+        if (service.isCategoryOtherServiceEnabled() == checked) {
             Log.d(TAG, "already same status: " + checked);
             return false;
         }
 
-        service.setOtherServiceEnabled(checked);
+        service.setCategoryOtherServiceEnabled(checked);
         status.checked = checked;
 
         return writeOthersLocked();
