@@ -37,6 +37,7 @@ android_app {
         ":statslog-Nfc-java-gen",
     ],
     platform_apis: true,
+    privileged: true,
     certificate: "platform",
     // TODO: This needs to change once framework-nfc is ready.
     // min_sdk_version: "VanillaIceCream",
@@ -68,6 +69,7 @@ android_app {
         "com.android.nfcservices"
     ],
     jarjar_rules: "jarjar-rules.txt",
+    privapp_allowlist: ":privapp_allowlist_com.android.nfc.xml",
 }
 
 filegroup {
@@ -79,4 +81,9 @@ filegroup {
     visibility: [
         "//packages/apps/Nfc/tests/unit",
     ],
+}
+
+filegroup {
+    name: "privapp_allowlist_com.android.nfc.xml",
+    srcs: ["com.android.nfc.xml"],
 }
