@@ -1049,8 +1049,6 @@ void static nfaVSCallback(uint8_t event, uint16_t param_len, uint8_t* p_param) {
       }
     } break;
     default:
-      DLOG_IF(INFO, nfc_debug_enabled)
-          << StringPrintf("Unknown NFC Proprietary opcode %x", event);
       break;
   }
 }
@@ -1092,6 +1090,9 @@ static jboolean nfcManager_setObserveMode(JNIEnv* e, jobject, jboolean enable) {
   if (reenbleDiscovery) {
     startRfDiscovery(true);
   }
+  DLOG_IF(INFO, nfc_debug_enabled)
+      << StringPrintf("%s: Set observe mode to %s with result %x", __FUNCTION__,
+                      (enable != JNI_FALSE ? "TRUE" : "FALSE"), gVSCmdStatus);
   return gVSCmdStatus == NFA_STATUS_OK;
 }
 
