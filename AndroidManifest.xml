@@ -72,6 +72,7 @@
                  android:theme="@android:style/Theme.Material.Light"
                  android:persistent="true"
                  android:persistentWhenFeatureAvailable="android.hardware.nfc.any"
+                 android:restoreAnyVersion="true"
                  android:backupAgent="com.android.nfc.NfcBackupAgent"
                  android:killAfterRestore="false"
                  android:usesCleartextTraffic="false"
