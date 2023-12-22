@@ -164,7 +164,9 @@ public class HostEmulationManager {
 
     public void onPollingLoopDetected(Bundle pollingFrame) {
         synchronized (mLock) {
-            mState = STATE_POLLING_LOOP;
+            if (mState == STATE_IDLE) {
+                mState = STATE_POLLING_LOOP;
+            }
             Messenger service = getForegroundServiceOrDefault();
             if (service != null) {
                 ArrayList<Bundle> frames = new ArrayList<Bundle>();
@@ -483,7 +485,9 @@ public class HostEmulationManager {
         msgData.putParcelableArrayList(HostApduService.POLLING_LOOP_FRAMES_BUNDLE_KEY, frames);
         msg.setData(msgData);
         msg.replyTo = mMessenger;
-        mState = STATE_POLLING_LOOP;
+        if (mState == STATE_IDLE) {
+            mState = STATE_POLLING_LOOP;
+        }
         try {
             mActiveService.send(msg);
         } catch (RemoteException e) {
