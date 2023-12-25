@@ -201,7 +201,7 @@ public class NativeNfcManager implements DeviceHost {
     public native int getLfT3tMax();
 
     @Override
-    public native void doSetScreenState(int screen_state_mask);
+    public native void doSetScreenState(int screen_state_mask, boolean alwaysPoll);
 
     @Override
     public native int getNciVersion();
@@ -356,6 +356,8 @@ public class NativeNfcManager implements DeviceHost {
     @Override
     public native int getMaxRoutingTableSize();
 
+    public native boolean isMultiTag();
+
     /** Notifies Ndef Message (TODO: rename into notifyTargetDiscovered) */
     private void notifyNdefMessageListeners(NativeNfcTag tag) {
         mListener.onRemoteEndpointDiscovered(tag);
@@ -456,5 +458,9 @@ public class NativeNfcManager implements DeviceHost {
         pos += (length + 2);
         }
         mListener.onPollingLoopDetected(frame);
+    }
+
+    private void notifyWlcStopped(int wpt_end_condition) {
+        mListener.onWlcStopped(wpt_end_condition);
     }
 }

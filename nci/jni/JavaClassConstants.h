@@ -29,6 +29,8 @@ extern jmethodID gCachedNfcManagerNotifyHostEmuDeactivated;
 
 extern jmethodID gCachedNfcManagerNotifyEeUpdated;
 
+extern jmethodID gCachedNfcManagerNotifyWlcStopped;
+
 extern const char* gNativeP2pDeviceClassName;
 extern const char* gNativeNfcTagClassName;
 extern const char* gNativeNfcManagerClassName;

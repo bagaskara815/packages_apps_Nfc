@@ -46,6 +46,7 @@ class NfcTag {
                                              // service received from
                                              // RF_INTF_ACTIVATED NTF
   int mNumTechList;  // current number of NFC technologies in the list
+  int mNumRfDiscId;
 
   /*******************************************************************************
   **
