@@ -26,6 +26,7 @@
 
 #include "HciEventManager.h"
 #include "JavaClassConstants.h"
+#include "NativeWlcManager.h"
 #include "NfcAdaptation.h"
 #ifdef DTA_ENABLED
 #include "NfcDta.h"
@@ -96,6 +97,7 @@ jmethodID gCachedNfcManagerNotifyRfFieldDeactivated;
 jmethodID gCachedNfcManagerNotifyEeUpdated;
 jmethodID gCachedNfcManagerNotifyHwErrorReported;
 jmethodID gCachedNfcManagerNotifyPollingLoopFrame;
+jmethodID gCachedNfcManagerNotifyWlcStopped;
 const char* gNativeP2pDeviceClassName =
     "com/android/nfc/dhimpl/NativeP2pDevice";
 const char* gNativeNfcTagClassName = "com/android/nfc/dhimpl/NativeNfcTag";
@@ -136,6 +138,7 @@ static bool sAbortConnlessWait = false;
 static jint sLfT3tMax = 0;
 static bool sRoutingInitialized = false;
 static bool sIsRecovering = false;
+static bool sIsAlwaysPolling = false;
 
 #define CONFIG_UPDATE_TECH_MASK (1 << 1)
 #define DEFAULT_TECH_MASK                                                  \
@@ -155,7 +158,8 @@ static tNFA_STATUS stopPolling_rfDiscoveryDisabled();
 static tNFA_STATUS startPolling_rfDiscoveryDisabled(
     tNFA_TECHNOLOGY_MASK tech_mask);
 static void nfcManager_doSetScreenState(JNIEnv* e, jobject o,
-                                        jint screen_state_mask);
+                                        jint screen_state_mask,
+                                        jboolean alwaysPoll);
 static jboolean nfcManager_doSetPowerSavingMode(JNIEnv* e, jobject o,
                                                 bool flag);
 tNFA_STATUS gVSCmdStatus = NFA_STATUS_OK;
@@ -389,7 +393,9 @@ static void nfaConnectionCallback(uint8_t connEvent,
       if (!isListenMode(eventData->activated) &&
           (prevScreenState == NFA_SCREEN_STATE_OFF_LOCKED ||
            prevScreenState == NFA_SCREEN_STATE_OFF_UNLOCKED)) {
-        NFA_Deactivate(FALSE);
+        if (!sIsAlwaysPolling) {
+          NFA_Deactivate(FALSE);
+        }
       }
       if (isPeerToPeer(eventData->activated)) {
         if (sReaderModeEnabled) {
@@ -670,6 +676,9 @@ static jboolean nfcManager_initNativeStruc(JNIEnv* e, jobject o) {
 
   gCachedNfcManagerNotifyPollingLoopFrame =
       e->GetMethodID(cls.get(), "notifyPollingLoopFrame", "(I[B)V");
+
+  gCachedNfcManagerNotifyWlcStopped =
+      e->GetMethodID(cls.get(), "notifyWlcStopped", "(I)V");
 
   if (nfc_jni_cache_object(e, gNativeNfcTagClassName, &(nat->cached_NfcTag)) ==
       -1) {
@@ -1201,6 +1210,7 @@ static jboolean nfcManager_doInitialize(JNIEnv* e, jobject o) {
         nativeNfcTag_registerNdefTypeHandler();
         NfcTag::getInstance().initialize(getNative(e, o));
         HciEventManager::getInstance().initialize(getNative(e, o));
+        NativeWlcManager::getInstance().initialize(getNative(e, o));
 
         /////////////////////////////////////////////////////////////////////////////////
         // Add extra configuration here (work-arounds, etc.)
@@ -1689,11 +1699,13 @@ static jint nfcManager_doGetNciVersion(JNIEnv*, jobject) {
 }
 
 static void nfcManager_doSetScreenState(JNIEnv* e, jobject o,
-                                        jint screen_state_mask) {
+                                        jint screen_state_mask,
+                                        jboolean alwaysPoll) {
   tNFA_STATUS status = NFA_STATUS_OK;
   uint8_t state = (screen_state_mask & NFA_SCREEN_STATE_MASK);
   uint8_t discovry_param =
       NCI_LISTEN_DH_NFCEE_ENABLE_MASK | NCI_POLLING_DH_ENABLE_MASK;
+  sIsAlwaysPolling = alwaysPoll;
 
   DLOG_IF(INFO, nfc_debug_enabled)
       << StringPrintf("%s: state = %d prevScreenState= %d, discovry_param = %d",
@@ -1758,17 +1770,18 @@ static void nfcManager_doSetScreenState(JNIEnv* e, jobject o,
         NCI_LISTEN_DH_NFCEE_ENABLE_MASK | NCI_POLLING_DH_ENABLE_MASK;
   }
 
-  SyncEventGuard guard(gNfaSetConfigEvent);
-  status = NFA_SetConfig(NCI_PARAM_ID_CON_DISCOVERY_PARAM,
-                         NCI_PARAM_LEN_CON_DISCOVERY_PARAM, &discovry_param);
-  if (status == NFA_STATUS_OK) {
-    gNfaSetConfigEvent.wait();
-  } else {
-    LOG(ERROR) << StringPrintf("%s: Failed to update CON_DISCOVER_PARAM",
-                               __FUNCTION__);
-    return;
+  if (!sIsAlwaysPolling) {
+    SyncEventGuard guard(gNfaSetConfigEvent);
+    status = NFA_SetConfig(NCI_PARAM_ID_CON_DISCOVERY_PARAM,
+                           NCI_PARAM_LEN_CON_DISCOVERY_PARAM, &discovry_param);
+    if (status == NFA_STATUS_OK) {
+      gNfaSetConfigEvent.wait();
+    } else {
+      LOG(ERROR) << StringPrintf("%s: Failed to update CON_DISCOVER_PARAM",
+                                 __FUNCTION__);
+      return;
+    }
   }
-
   // skip remaining SetScreenState tasks when trying to silent recover NFCC
   if (recovery_option && sIsRecovering) {
     prevScreenState = state;
@@ -1891,6 +1904,27 @@ static jint nfcManager_getIsoDepMaxTransceiveLength(JNIEnv*, jobject) {
  *******************************************************************************/
 static jint nfcManager_getAidTableSize(JNIEnv*, jobject) {
   return NFA_GetAidTableSize();
+}
+
+/*******************************************************************************
+**
+** Function:        nfcManager_IsMultiTag
+**
+** Description:     Check if it a multi tag case.
+**                  e: JVM environment.
+**                  o: Java object.
+**
+** Returns:         None.
+**
+*******************************************************************************/
+static bool nfcManager_isMultiTag() {
+  DLOG_IF(INFO, nfc_debug_enabled)
+      << StringPrintf("%s: enter mNumRfDiscId = %d", __func__,
+                      NfcTag::getInstance().mNumRfDiscId);
+  bool status = false;
+  if (NfcTag::getInstance().mNumRfDiscId > 1) status = true;
+  LOG_IF(INFO, nfc_debug_enabled) << StringPrintf("isMultiTag = %d", status);
+  return status;
 }
 
 /*******************************************************************************
@@ -2043,7 +2077,7 @@ static JNINativeMethod gMethods[] = {
     {"doEnableScreenOffSuspend", "()V",
      (void*)nfcManager_doEnableScreenOffSuspend},
 
-    {"doSetScreenState", "(I)V", (void*)nfcManager_doSetScreenState},
+    {"doSetScreenState", "(IZ)V", (void*)nfcManager_doSetScreenState},
 
     {"doDisableScreenOffSuspend", "()V",
      (void*)nfcManager_doDisableScreenOffSuspend},
@@ -2076,7 +2110,10 @@ static JNINativeMethod gMethods[] = {
     {"getMaxRoutingTableSize", "()I",
      (void*)nfcManager_doGetMaxRoutingTableSize},
 
-    {"setObserveMode", "(Z)Z", (void*)nfcManager_setObserveMode}};
+    {"setObserveMode", "(Z)Z", (void*)nfcManager_setObserveMode},
+
+    {"isMultiTag", "()Z", (void*)nfcManager_isMultiTag},
+};
 
 /*******************************************************************************
 **
