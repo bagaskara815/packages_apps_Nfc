@@ -2169,6 +2169,15 @@ public class NfcService implements DeviceHostListener, ForegroundUtils.Callback 
 
             mWlcStateListener.remove(listener);
         }
+
+        @Override
+        public void notifyPollingLoop(Bundle frame) {
+            try {
+                onPollingLoopDetected(frame);
+            } catch (Exception ex) {
+                Log.e(TAG, "error when notifying polling loop", ex);
+            }
+        }
     }
 
     final class SeServiceDeathRecipient implements IBinder.DeathRecipient {

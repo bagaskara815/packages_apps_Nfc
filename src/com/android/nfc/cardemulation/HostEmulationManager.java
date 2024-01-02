@@ -150,14 +150,16 @@ public class HostEmulationManager {
     private Messenger getForegroundServiceOrDefault() {
         PackageManager packageManager = mContext.getPackageManager();
         ComponentName preferredServiceName = mAidCache.getPreferredService();
-        try {
-            ApplicationInfo preferredServiceInfo =
-                packageManager.getApplicationInfo(preferredServiceName.getPackageName(), 0);
-            UserHandle user = UserHandle.getUserHandleForUid(preferredServiceInfo.uid);
-            return bindServiceIfNeededLocked(user.getIdentifier(), preferredServiceName);
-        } catch (NameNotFoundException nnfe) {
-            Log.e(TAG, "Packange name not found, dropping polling frame", nnfe);
-            unbindServiceIfNeededLocked();
+        if (preferredServiceName != null) {
+            try {
+                ApplicationInfo preferredServiceInfo =
+                    packageManager.getApplicationInfo(preferredServiceName.getPackageName(), 0);
+                UserHandle user = UserHandle.getUserHandleForUid(preferredServiceInfo.uid);
+                return bindServiceIfNeededLocked(user.getIdentifier(), preferredServiceName);
+            } catch (NameNotFoundException nnfe) {
+                Log.e(TAG, "Packange name not found, dropping polling frame", nnfe);
+                unbindServiceIfNeededLocked();
+            }
         }
         return bindServiceIfNeededLocked(mPaymentServiceUserId, mPaymentServiceName);
     }
