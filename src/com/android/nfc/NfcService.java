@@ -188,6 +188,9 @@ public class NfcService implements DeviceHostListener, ForegroundUtils.Callback 
     static final int MSG_PREFERRED_PAYMENT_CHANGED = 18;
     static final int MSG_TOAST_DEBOUNCE_EVENT = 19;
     static final int MSG_DELAY_POLLING = 20;
+    static final int MSG_CLEAR_ROUTING_TABLE = 21;
+    static final int MSG_UPDATE_ISODEP_PROTOCOL_ROUTE = 22;
+    static final int MSG_UPDATE_TECHNOLOGY_AB_ROUTE = 23;
 
     static final String MSG_ROUTE_AID_PARAM_TAG = "power";
 
@@ -267,6 +270,8 @@ public class NfcService implements DeviceHostListener, ForegroundUtils.Callback 
             new ReaderModeDeathRecipient();
     private final SeServiceDeathRecipient mSeServiceDeathRecipient =
             new SeServiceDeathRecipient();
+    private final DiscoveryTechDeathRecipient mDiscoveryTechDeathRecipient =
+            new DiscoveryTechDeathRecipient();
     private final NfcUnlockManager mNfcUnlockManager;
 
     private final BackupManager mBackupManager;
@@ -1724,6 +1729,41 @@ public class NfcService implements DeviceHostListener, ForegroundUtils.Callback 
         }
 
         @Override
+        public void updateDiscoveryTechnology(IBinder binder, int pollTech, int listenTech)
+                throws RemoteException {
+            NfcPermissions.enforceUserPermissions(mContext);
+            synchronized (NfcService.this) {
+                if (!isNfcEnabled()) {
+                    Log.d(TAG, "updateDiscoveryTechnology: NFC is not enabled.");
+                    return;
+                }
+
+                Log.d(TAG, "updateDiscoveryTechnology: pollTech: 0x" +
+                        Integer.toHexString(pollTech) +
+                        ", listenTech: 0x" + Integer.toHexString(listenTech));
+                if (pollTech == NfcAdapter.FLAG_USE_ALL_TECH &&
+                        listenTech == NfcAdapter.FLAG_USE_ALL_TECH) {
+                    try {
+                        mDeviceHost.resetDiscoveryTech();
+                        binder.unlinkToDeath(mDiscoveryTechDeathRecipient, 0);
+                    } catch (NoSuchElementException e) {
+                        Log.e(TAG, "Change Tech Binder was never registered.");
+                    }
+                } else {
+                    try {
+                        mDeviceHost.setDiscoveryTech(pollTech, listenTech);
+                        binder.linkToDeath(mDiscoveryTechDeathRecipient, 0);
+                    } catch (RemoteException e) {
+                        Log.e(TAG, "Remote binder has already died.");
+                        return;
+                    }
+                }
+
+                applyRouting(true);
+            }
+        }
+
+        @Override
         public void setReaderMode(IBinder binder, IAppCallback callback, int flags, Bundle extras)
                 throws RemoteException {
             boolean privilegedCaller = false;
@@ -2133,6 +2173,19 @@ public class NfcService implements DeviceHostListener, ForegroundUtils.Callback 
                 if (mReaderModeParams != null) {
                     mPollingDisableDeathRecipients.values().remove(this);
                     resetReaderModeParams();
+                }
+            }
+        }
+    }
+
+    final class DiscoveryTechDeathRecipient implements IBinder.DeathRecipient {
+        @Override
+        public void binderDied() {
+            synchronized (NfcService.this) {
+                if (isNfcEnabled()) {
+                    if (DBG) Log.d(TAG, "setDiscoveryTech death recipient");
+                    mDeviceHost.resetDiscoveryTech();
+                    applyRouting(true);
                 }
             }
         }
@@ -2993,6 +3046,18 @@ public class NfcService implements DeviceHostListener, ForegroundUtils.Callback 
         sendMessage(MSG_PREFERRED_PAYMENT_CHANGED, reason);
     }
 
+    public void clearRoutingTable(int clearFlags) {
+        sendMessage(MSG_CLEAR_ROUTING_TABLE, clearFlags);
+    }
+
+    public void setIsoDepProtocolRoute(int route) {
+        sendMessage(MSG_UPDATE_ISODEP_PROTOCOL_ROUTE, route);
+    }
+
+    public void setTechnologyABRoute(int route) {
+        sendMessage(MSG_UPDATE_TECHNOLOGY_AB_ROUTE, route);
+    }
+
     void sendMessage(int what, Object obj) {
         Message msg = mHandler.obtainMessage();
         msg.what = what;
@@ -3320,6 +3385,19 @@ public class NfcService implements DeviceHostListener, ForegroundUtils.Callback 
                         mDeviceHost.startStopPolling(true);
                     }
                     if (DBG) Log.d(TAG, "Polling is started");
+                    break;
+                case MSG_CLEAR_ROUTING_TABLE:
+                    if (DBG) Log.d(TAG, "Clear routing table");
+                    int clearFlags = (Integer)msg.obj;
+                    mDeviceHost.clearRoutingEntry(clearFlags);
+                    break;
+                case MSG_UPDATE_ISODEP_PROTOCOL_ROUTE:
+                    if (DBG) Log.d(TAG, "Update IsoDep Protocol Route");
+                    mDeviceHost.setIsoDepProtocolRoute((Integer)msg.obj);
+                    break;
+                case MSG_UPDATE_TECHNOLOGY_AB_ROUTE:
+                    if (DBG) Log.d(TAG, "Update technology A&B route");
+                    mDeviceHost.setTechnologyABRoute((Integer)msg.obj);
                     break;
                 default:
                     Log.e(TAG, "Unknown message received");

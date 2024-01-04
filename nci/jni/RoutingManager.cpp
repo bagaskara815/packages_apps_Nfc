@@ -347,12 +347,12 @@ bool RoutingManager::addAidRouting(const uint8_t* aid, uint8_t aidLen,
           (route != 0x00) ? mOffHostAidRoutingPowerState & power : power;
     }
   }
-  SyncEventGuard guard(mRoutingEvent);
+  SyncEventGuard guard(mAidAddRemoveEvent);
   mAidRoutingConfigured = false;
   tNFA_STATUS nfaStat =
       NFA_EeAddAidRouting(route, aidLen, (uint8_t*)aid, powerState, aidInfo);
   if (nfaStat == NFA_STATUS_OK) {
-    mRoutingEvent.wait();
+    mAidAddRemoveEvent.wait();
   }
   if (mAidRoutingConfigured) {
     DLOG_IF(INFO, nfc_debug_enabled) << fn << ": routed AID";
@@ -366,11 +366,20 @@ bool RoutingManager::addAidRouting(const uint8_t* aid, uint8_t aidLen,
 bool RoutingManager::removeAidRouting(const uint8_t* aid, uint8_t aidLen) {
   static const char fn[] = "RoutingManager::removeAidRouting";
   DLOG_IF(INFO, nfc_debug_enabled) << fn << ": enter";
-  SyncEventGuard guard(mRoutingEvent);
+
+  if (aidLen != 0) {
+    DLOG_IF(INFO, nfc_debug_enabled)
+        << StringPrintf("%s : len=%d, 0x%x 0x%x 0x%x 0x%x 0x%x", fn, aidLen,
+                        *(aid), *(aid + 1), *(aid + 2), *(aid + 3), *(aid + 4));
+  } else {
+    DLOG_IF(INFO, nfc_debug_enabled) << fn << "Remove Empty aid";
+  }
+
+  SyncEventGuard guard(mAidAddRemoveEvent);
   mAidRoutingConfigured = false;
   tNFA_STATUS nfaStat = NFA_EeRemoveAidRouting(aidLen, (uint8_t*)aid);
   if (nfaStat == NFA_STATUS_OK) {
-    mRoutingEvent.wait();
+    mAidAddRemoveEvent.wait();
   }
   if (mAidRoutingConfigured) {
     DLOG_IF(INFO, nfc_debug_enabled) << fn << ": removed AID";
@@ -595,6 +604,22 @@ void RoutingManager::updateRoutingTable() {
   updateDefaultRoute();
 }
 
+void RoutingManager::updateIsoDepProtocolRoute(int route) {
+  static const char fn[] = "RoutingManager::updateIsoDepProtocolRoute";
+  tNFA_PROTOCOL_MASK protoMask = NFA_PROTOCOL_MASK_ISO_DEP;
+  tNFA_STATUS nfaStat;
+
+  SyncEventGuard guard(mRoutingEvent);
+  nfaStat = NFA_EeClearDefaultProtoRouting(mDefaultIsoDepRoute, protoMask);
+  if (nfaStat == NFA_STATUS_OK)
+    mRoutingEvent.wait();
+  else
+    LOG(ERROR) << fn << "Fail to clear IsoDep route";
+
+  mDefaultIsoDepRoute = route;
+  updateDefaultProtocolRoute();
+}
+
 void RoutingManager::updateDefaultProtocolRoute() {
   static const char fn[] = "RoutingManager::updateDefaultProtocolRoute";
 
@@ -682,6 +707,24 @@ void RoutingManager::updateDefaultRoute() {
     else
       LOG(ERROR) << fn << ": failed to register zero length AID";
   }
+}
+
+tNFA_TECHNOLOGY_MASK RoutingManager::updateTechnologyABRoute(int route) {
+  static const char fn[] = "RoutingManager::updateTechnologyABRoute";
+
+  tNFA_STATUS nfaStat;
+
+  SyncEventGuard guard(mRoutingEvent);
+  nfaStat = NFA_EeClearDefaultTechRouting(
+      mDefaultOffHostRoute,
+      NFA_TECHNOLOGY_MASK_A | NFA_TECHNOLOGY_MASK_B | NFA_TECHNOLOGY_MASK_F);
+  if (nfaStat == NFA_STATUS_OK)
+    mRoutingEvent.wait();
+  else
+    LOG(ERROR) << fn << "Fail to clear Tech route";
+
+  mDefaultOffHostRoute = route;
+  return updateEeTechRouteSetting();
 }
 
 tNFA_TECHNOLOGY_MASK RoutingManager::updateEeTechRouteSetting() {
@@ -899,10 +942,10 @@ void RoutingManager::nfaEeCallback(tNFA_EE_EVT event,
     case NFA_EE_ADD_AID_EVT: {
       DLOG_IF(INFO, nfc_debug_enabled) << StringPrintf(
           "%s: NFA_EE_ADD_AID_EVT  status=%u", fn, eventData->status);
-      SyncEventGuard guard(routingManager.mRoutingEvent);
+      SyncEventGuard guard(routingManager.mAidAddRemoveEvent);
       routingManager.mAidRoutingConfigured =
           (eventData->status == NFA_STATUS_OK);
-      routingManager.mRoutingEvent.notifyOne();
+      routingManager.mAidAddRemoveEvent.notifyOne();
     } break;
 
     case NFA_EE_ADD_SYSCODE_EVT: {
@@ -922,10 +965,10 @@ void RoutingManager::nfaEeCallback(tNFA_EE_EVT event,
     case NFA_EE_REMOVE_AID_EVT: {
       DLOG_IF(INFO, nfc_debug_enabled) << StringPrintf(
           "%s: NFA_EE_REMOVE_AID_EVT  status=%u", fn, eventData->status);
-      SyncEventGuard guard(routingManager.mRoutingEvent);
+      SyncEventGuard guard(routingManager.mAidAddRemoveEvent);
       routingManager.mAidRoutingConfigured =
           (eventData->status == NFA_STATUS_OK);
-      routingManager.mRoutingEvent.notifyOne();
+      routingManager.mAidAddRemoveEvent.notifyOne();
     } break;
 
     case NFA_EE_NEW_EE_EVT: {
@@ -1136,6 +1179,70 @@ void RoutingManager::eeSetPwrAndLinkCtrl(uint8_t config) {
   }
 }
 
+void RoutingManager::clearRoutingEntry(int clearFlags) {
+  static const char fn[] = "RoutingManager::clearRoutingEntry";
+
+  DLOG_IF(INFO, nfc_debug_enabled)
+      << StringPrintf("%s: Enter . Clear flags = %d", fn, clearFlags);
+  tNFA_STATUS nfaStat = NFA_STATUS_FAILED;
+
+  if (clearFlags & CLEAR_AID_ENTRIES) {
+    DLOG_IF(INFO, nfc_debug_enabled)
+        << StringPrintf("clear all of aid based routing");
+    uint8_t clearAID[] = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
+    uint8_t aidLen = 0x08;
+    RoutingManager::getInstance().removeAidRouting(clearAID, aidLen);
+  }
+
+  if (clearFlags & CLEAR_PROTOCOL_ENTRIES) {
+    for (uint8_t i = 0; i < mEeInfo.num_ee; i++) {
+      tNFA_HANDLE eeHandle = mEeInfo.ee_disc_info[i].ee_handle;
+      {
+        SyncEventGuard guard(mRoutingEvent);
+        nfaStat =
+            NFA_EeClearDefaultProtoRouting(eeHandle, NFA_PROTOCOL_MASK_ISO_DEP);
+        if (nfaStat == NFA_STATUS_OK) {
+          mRoutingEvent.wait();
+        }
+      }
+    }
+
+    {
+      SyncEventGuard guard(mRoutingEvent);
+      nfaStat =
+          NFA_EeClearDefaultProtoRouting(NFC_DH_ID, NFA_PROTOCOL_MASK_ISO_DEP);
+      if (nfaStat == NFA_STATUS_OK) {
+        mRoutingEvent.wait();
+      }
+    }
+  }
+
+  if (clearFlags & CLEAR_TECHNOLOGY_ENTRIES) {
+    for (uint8_t i = 0; i < mEeInfo.num_ee; i++) {
+      tNFA_HANDLE eeHandle = mEeInfo.ee_disc_info[i].ee_handle;
+      {
+        SyncEventGuard guard(mRoutingEvent);
+        nfaStat = NFA_EeClearDefaultTechRouting(
+            eeHandle, (NFA_TECHNOLOGY_MASK_A | NFA_TECHNOLOGY_MASK_B |
+                       NFA_TECHNOLOGY_MASK_F));
+        if (nfaStat == NFA_STATUS_OK) {
+          mRoutingEvent.wait();
+        }
+      }
+    }
+
+    {
+      SyncEventGuard guard(mRoutingEvent);
+      nfaStat = NFA_EeClearDefaultTechRouting(
+          NFC_DH_ID, (NFA_TECHNOLOGY_MASK_A | NFA_TECHNOLOGY_MASK_B |
+                      NFA_TECHNOLOGY_MASK_F));
+      if (nfaStat == NFA_STATUS_OK) {
+        mRoutingEvent.wait();
+      }
+    }
+  }
+}
+
 void RoutingManager::deinitialize() {
   onNfccShutdown();
   NFA_EeDeregister(nfaEeCallback);
@@ -1145,7 +1252,7 @@ int RoutingManager::registerJniFunctions(JNIEnv* e) {
   static const char fn[] = "RoutingManager::registerJniFunctions";
   DLOG_IF(INFO, nfc_debug_enabled) << StringPrintf("%s", fn);
   return jniRegisterNativeMethods(
-      e, "com/android/nfc/cardemulation/AidRoutingManager", sMethods,
+      e, "com/android/nfc/cardemulation/RoutingOptionManager", sMethods,
       NELEM(sMethods));
 }
 
