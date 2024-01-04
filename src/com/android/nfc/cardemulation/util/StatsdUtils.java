@@ -82,14 +82,19 @@ public class StatsdUtils {
 
     public StatsdUtils(String seName) {
         mSeName = seName;
+
+        // HCEF has no category, default it to PAYMENT category to record every call
+        if (seName.equals(SE_NAME_HCEF)) mTransactionCategory = CardEmulation.CATEGORY_PAYMENT;
     }
 
     public StatsdUtils() {}
 
     private void resetCardEmulationEvent() {
+        // Reset mTransactionCategory value to prevent accidental triggers in general
+        // except for HCEF, which is always intentional because it only works in foreground
+        if (!mSeName.equals(SE_NAME_HCEF)) mTransactionCategory = CardEmulation.EXTRA_CATEGORY;
         mBindingStartTimeMillis = 0;
         mWaitingForFirstResponse = false;
-        mTransactionCategory = CardEmulation.EXTRA_CATEGORY;
         mTransactionUid = -1;
     }
 
@@ -205,6 +210,7 @@ public class StatsdUtils {
 
     public void logCardEmulationDeactivatedEvent() {
         if (mTransactionCategory.equals(CardEmulation.EXTRA_CATEGORY)) {
+            // Skip deactivation calls without select apdu
             resetCardEmulationEvent();
             return;
         }
