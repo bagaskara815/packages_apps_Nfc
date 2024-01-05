@@ -16,8 +16,8 @@
 
 #include "NativeWlcManager.h"
 
+#include <android-base/logging.h>
 #include <android-base/stringprintf.h>
-#include <base/logging.h>
 #include <cutils/properties.h>
 #include <errno.h>
 #include <nativehelper/JNIPlatformHelp.h>
@@ -46,8 +46,6 @@ static SyncEvent sNfaWlcEnableEvent;  // event for NFA_WlcStart()
 static SyncEvent sNfaWlcEvent;        // event for NFA_Wlc...()
 
 static bool sIsWlcpStarted = false;
-
-extern bool nfc_debug_enabled;
 
 Mutex gMutexWlc;
 
@@ -110,7 +108,7 @@ NativeWlcManager& NativeWlcManager::getInstance() {
 void NativeWlcManager::initialize(nfc_jni_native_data* native) {
   tNFA_STATUS stat = NFA_STATUS_FAILED;
 
-  DLOG_IF(INFO, nfc_debug_enabled) << StringPrintf("%s: enter", __func__);
+  LOG(DEBUG) << StringPrintf("%s: enter", __func__);
 
   mNativeData = native;
   mIsWlcEnabled = false;
@@ -122,11 +120,10 @@ void NativeWlcManager::initialize(nfc_jni_native_data* native) {
     // TODO: get enable result to stop directly if failed
     SyncEventGuard g(sNfaWlcEnableEvent);
     sNfaWlcEnableEvent.wait();
-    DLOG_IF(INFO, nfc_debug_enabled)
-        << StringPrintf("%s: enable Wlc module success", __func__);
+    LOG(DEBUG) << StringPrintf("%s: enable Wlc module success", __func__);
   } else {
-    DLOG_IF(ERROR, nfc_debug_enabled) << StringPrintf(
-        "%s: fail enable Wlc module; error=0x%X", __func__, stat);
+    LOG(ERROR) << StringPrintf("%s: fail enable Wlc module; error=0x%X",
+                               __func__, stat);
   }
 }
 
@@ -148,7 +145,7 @@ void NativeWlcManager::notifyWlcCompletion(uint8_t wpt_end_condition) {
     return;
   }
 
-  DLOG_IF(INFO, nfc_debug_enabled) << StringPrintf("%s: ", __func__);
+  LOG(DEBUG) << StringPrintf("%s: ", __func__);
 
   e->CallVoidMethod(mNativeData->manager,
                     android::gCachedNfcManagerNotifyWlcStopped,
@@ -172,15 +169,13 @@ void NativeWlcManager::notifyWlcCompletion(uint8_t wpt_end_condition) {
 *******************************************************************************/
 void nfaWlcManagementCallback(tNFA_WLC_EVT wlcEvent,
                               tNFA_WLC_EVT_DATA* eventData) {
-  DLOG_IF(INFO, nfc_debug_enabled)
-      << StringPrintf("%s: enter; event=0x%X", __func__, wlcEvent);
+  LOG(DEBUG) << StringPrintf("%s: enter; event=0x%X", __func__, wlcEvent);
 
   switch (wlcEvent) {
     case NFA_WLC_ENABLE_RESULT_EVT:  // whether WLC module enabled
     {
-      DLOG_IF(INFO, nfc_debug_enabled)
-          << StringPrintf("%s: NFA_WLC_ENABLE_RESULT_EVT: status = %u",
-                          __func__, eventData->status);
+      LOG(DEBUG) << StringPrintf("%s: NFA_WLC_ENABLE_RESULT_EVT: status = %u",
+                                 __func__, eventData->status);
 
       SyncEventGuard guard(sNfaWlcEnableEvent);
       sNfaWlcEnableEvent.notifyOne();
@@ -188,9 +183,8 @@ void nfaWlcManagementCallback(tNFA_WLC_EVT wlcEvent,
 
     case NFA_WLC_START_RESULT_EVT:  // whether WLCP successfully started
     {
-      DLOG_IF(INFO, nfc_debug_enabled)
-          << StringPrintf("%s: NFA_WLC_START_RESULT_EVT: status = %u", __func__,
-                          eventData->status);
+      LOG(DEBUG) << StringPrintf("%s: NFA_WLC_START_RESULT_EVT: status = %u",
+                                 __func__, eventData->status);
 
       sIsWlcpStarted = eventData->status == NFA_STATUS_OK;
       SyncEventGuard guard(sNfaWlcEvent);
@@ -200,9 +194,9 @@ void nfaWlcManagementCallback(tNFA_WLC_EVT wlcEvent,
     case NFA_WLC_START_WPT_RESULT_EVT:  // whether WLC Power Transfer
                                         // successfully started
     {
-      DLOG_IF(INFO, nfc_debug_enabled)
-          << StringPrintf("%s: NFA_WLC_START_WPT_RESULT_EVT: status = %u",
-                          __func__, eventData->status);
+      LOG(DEBUG) << StringPrintf(
+          "%s: NFA_WLC_START_WPT_RESULT_EVT: status = %u", __func__,
+          eventData->status);
 
       SyncEventGuard guard(sNfaWlcEvent);
       sNfaWlcEvent.notifyOne();
@@ -211,7 +205,7 @@ void nfaWlcManagementCallback(tNFA_WLC_EVT wlcEvent,
     case NFA_WLC_CHARGING_RESULT_EVT:  // notify completion of power transfer
                                        // phase
     {
-      DLOG_IF(INFO, nfc_debug_enabled) << StringPrintf(
+      LOG(DEBUG) << StringPrintf(
           "%s: NFA_WLC_CHARGING_RESULT_EVT: End Condition = 0x%x", __func__,
           eventData->wpt_end_cdt);
 
@@ -221,8 +215,7 @@ void nfaWlcManagementCallback(tNFA_WLC_EVT wlcEvent,
     } break;
 
     default:
-      DLOG_IF(INFO, nfc_debug_enabled)
-          << StringPrintf("%s: unhandled event", __func__);
+      LOG(DEBUG) << StringPrintf("%s: unhandled event", __func__);
       break;
   }
 }
@@ -242,19 +235,19 @@ jboolean NativeWlcManager::com_android_nfc_wlc_startWlcP(JNIEnv* e, jobject,
                                                          jint mode) {
   tNFA_STATUS stat = NFA_STATUS_FAILED;
 
-  DLOG_IF(INFO, nfc_debug_enabled) << StringPrintf("%s: enter", __func__);
+  LOG(DEBUG) << StringPrintf("%s: enter", __func__);
 
   gMutexWlc.lock();
   stat = NFA_WlcStart(mode);
 
   if (stat == NFA_STATUS_OK) {
-    DLOG_IF(INFO, nfc_debug_enabled) << StringPrintf(
+    LOG(DEBUG) << StringPrintf(
         "%s: start Wlc Poller, wait for success confirmation", __func__);
     SyncEventGuard g(sNfaWlcEvent);
     sNfaWlcEvent.wait();
   } else {
-    DLOG_IF(ERROR, nfc_debug_enabled)
-        << StringPrintf("%s: fail start WlcPoller; error=0x%X", __func__, stat);
+    LOG(ERROR) << StringPrintf("%s: fail start WlcPoller; error=0x%X", __func__,
+                               stat);
   }
   gMutexWlc.unlock();
   return sIsWlcpStarted ? JNI_TRUE : JNI_FALSE;
@@ -276,21 +269,20 @@ jboolean NativeWlcManager::com_android_nfc_wlc_chargeWlcListener(
     JNIEnv* e, jobject, jint power_adj_req, jint wpt_time_int) {
   tNFA_STATUS stat = NFA_STATUS_FAILED;
 
-  DLOG_IF(INFO, nfc_debug_enabled)
-      << StringPrintf("%s: wpt_time_int = %d", __func__, wpt_time_int);
+  LOG(DEBUG) << StringPrintf("%s: wpt_time_int = %d", __func__, wpt_time_int);
 
   gMutexWlc.lock();
   // TODO: condition call to sIsWlcpStarted
   // TODO: limit the min of wpt_time_int
   stat = NFA_WlcStartWPT((uint16_t)(power_adj_req & 0xFFFF), wpt_time_int);
   if (stat == NFA_STATUS_OK) {
-    DLOG_IF(INFO, nfc_debug_enabled) << StringPrintf(
+    LOG(DEBUG) << StringPrintf(
         "%s: charge Wlc Listener, wait for success confirmation", __func__);
     SyncEventGuard g(sNfaWlcEvent);
     sNfaWlcEvent.wait();
   } else {
-    DLOG_IF(ERROR, nfc_debug_enabled) << StringPrintf(
-        "%s: fail charge Wlc Listener; error=0x%X", __func__, stat);
+    LOG(ERROR) << StringPrintf("%s: fail charge Wlc Listener; error=0x%X",
+                               __func__, stat);
     gMutexWlc.unlock();
     return false;
   }
@@ -310,7 +302,7 @@ jboolean NativeWlcManager::com_android_nfc_wlc_chargeWlcListener(
 *******************************************************************************/
 int NativeWlcManager::registerJniFunctions(JNIEnv* e) {
   static const char fn[] = "NativeWlcManager::registerJniFunctions";
-  DLOG_IF(INFO, nfc_debug_enabled) << StringPrintf("%s", fn);
+  LOG(DEBUG) << StringPrintf("%s", fn);
   return jniRegisterNativeMethods(e, "com/android/nfc/wlc/NfcCharging",
                                   sMethods, NELEM(sMethods));
 }
