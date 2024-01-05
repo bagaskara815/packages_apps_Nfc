@@ -16,6 +16,8 @@
 
 package com.android.nfc.cardemulation;
 
+import android.annotation.TargetApi;
+import android.annotation.FlaggedApi;
 import android.app.ActivityManager;
 import android.content.ComponentName;
 import android.content.Context;
@@ -258,6 +260,33 @@ public class RegisteredAidCache {
 
     public boolean isRequiresScreenOnServiceExist() {
         return mRequiresScreenOnServiceExist;
+    }
+
+    @TargetApi(35)
+    @FlaggedApi(android.nfc.Flags.FLAG_NFC_READ_POLLING_LOOP)
+    ApduServiceInfo resolvePollingLoopFilterConflict(List<ApduServiceInfo> conflictingServices) {
+        ApduServiceInfo matchedForeground = null;
+        ApduServiceInfo matchedPayment = null;
+        for (ApduServiceInfo serviceInfo : conflictingServices) {
+            int userId = UserHandle.getUserHandleForUid(serviceInfo.getUid())
+                    .getIdentifier();
+            ComponentName componentName = serviceInfo.getComponent();
+
+            if (componentName.equals(mPreferredForegroundService) &&
+                    userId == mUserIdPreferredForegroundService) {
+                matchedForeground = serviceInfo;
+            } else if (componentName.equals(mPreferredPaymentService) &&
+                    userId == mUserIdPreferredPaymentService) {
+                matchedPayment = serviceInfo;
+            }
+        }
+        if (matchedForeground != null) {
+            return matchedForeground;
+        }
+        if (matchedPayment != null) {
+            return matchedPayment;
+        }
+        return null;
     }
 
     /**
