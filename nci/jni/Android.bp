@@ -31,13 +31,25 @@ cc_library_shared {
         "libcutils",
         "libutils",
         "liblog",
-        "libnfc-nci",
         "libchrome",
         "libbase",
-        "libstatslog_nfc",
+        // Treble configuration
+        "libhidlbase",
+        "libutils",
+        "libbinder_ndk",
+        "libstatssocket",
+        "libz",
     ],
 
     static_libs: [
+        "android.hardware.nfc@1.0",
+        "android.hardware.nfc@1.1",
+        "android.hardware.nfc@1.2",
+        // Add for AIDL
+        "android.hardware.nfc-V1-ndk",
+        "libnfcutils",
+        "libnfc-nci",
+        "libstatslog_nfc",
         "android_nfc_flags_aconfig_c_lib",
         "server_configurable_flags",
         "libxml2"
@@ -56,9 +68,15 @@ cc_library_shared {
         misc_undefined: ["bounds"],
         scs: true,
     },
+    stl: "libc++_static",
     apex_available: [
          "//apex_available:platform",
          "com.android.nfcservices"
+    ],
+    required: [
+        // Provide a default libnfc-nci.conf in /system/etc for devices that
+        // does not ship one in /product
+        "libnfc-nci.conf-default",
     ],
 }
 
