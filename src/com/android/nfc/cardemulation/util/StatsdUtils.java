@@ -150,7 +150,6 @@ public class StatsdUtils {
     private void logCardEmulationEvent(int statsdCategory) {
         NfcStatsLog.write(
                 NfcStatsLog.NFC_CARDEMULATION_OCCURRED, statsdCategory, mSeName, mTransactionUid);
-        if (DBG) Log.d(TAG, "CardEmulation Event Logged : " + mSeName + " - " + statsdCategory);
         resetCardEmulationEvent();
     }
 

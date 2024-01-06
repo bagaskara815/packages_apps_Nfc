@@ -278,6 +278,15 @@ static void nfaConnectionCallback(uint8_t connEvent,
       << StringPrintf("%s: event= %u", __func__, connEvent);
 
   switch (connEvent) {
+    case NFA_LISTEN_ENABLED_EVT:  // whether listening successfully started
+    {
+      DLOG_IF(INFO, nfc_debug_enabled) << StringPrintf(
+          "%s: NFA_LISTEN_ENABLED_EVT:status= %u", __func__, eventData->status);
+
+      SyncEventGuard guard(sNfaEnableDisablePollingEvent);
+      sNfaEnableDisablePollingEvent.notifyOne();
+    } break;
+
     case NFA_POLL_ENABLED_EVT:  // whether polling successfully started
     {
       DLOG_IF(INFO, nfc_debug_enabled) << StringPrintf(
@@ -2023,6 +2032,95 @@ static jbyteArray nfcManager_doGetRoutingTable(JNIEnv* e, jobject o) {
   return rtJavaArray;
 }
 
+static void nfcManager_clearRoutingEntry(JNIEnv* e, jobject o,
+                                         jint clearFlags) {
+  DLOG_IF(INFO, nfc_debug_enabled)
+      << StringPrintf("%s: clearFlags=0x%X", __func__, clearFlags);
+  RoutingManager::getInstance().disableRoutingToHost();
+  RoutingManager::getInstance().clearRoutingEntry(clearFlags);
+}
+
+static void nfcManager_updateIsoDepProtocolRoute(JNIEnv* e, jobject o,
+                                                 jint route) {
+  DLOG_IF(INFO, nfc_debug_enabled)
+      << StringPrintf("%s: clearFlags=0x%X", __func__, route);
+  RoutingManager::getInstance().updateIsoDepProtocolRoute(route);
+}
+
+static void nfcManager_updateTechnologyABRoute(JNIEnv* e, jobject o,
+                                               jint route) {
+  DLOG_IF(INFO, nfc_debug_enabled)
+      << StringPrintf("%s: clearFlags=0x%X", __func__, route);
+  RoutingManager::getInstance().updateTechnologyABRoute(route);
+}
+
+/*******************************************************************************
+**
+** Function:        nfcManager_setDiscoveryTech
+**
+** Description:     Temporarily changes the RF parameter
+**                  pollTech: RF tech parameters for poll mode
+**                  listenTech: RF tech parameters for listen mode
+**
+** Returns:         None.
+**
+*******************************************************************************/
+static void nfcManager_setDiscoveryTech(JNIEnv* e, jobject o, jint pollTech,
+                                        jint listenTech) {
+  tNFA_STATUS nfaStat;
+  bool isRevertPoll = false;
+  bool isRevertListen = false;
+  DLOG_IF(INFO, nfc_debug_enabled) << StringPrintf(
+      "%s  pollTech = 0x%x, listenTech = 0x%x", __func__, pollTech, listenTech);
+
+  if (pollTech < 0) isRevertPoll = true;
+  if (listenTech < 0) isRevertListen = true;
+
+  nativeNfcTag_acquireRfInterfaceMutexLock();
+  SyncEventGuard guard(sNfaEnableDisablePollingEvent);
+
+  nfaStat = NFA_ChangeDiscoveryTech(pollTech, listenTech, isRevertPoll,
+                                    isRevertListen);
+
+  if (nfaStat == NFA_STATUS_OK) {
+    // wait for NFA_LISTEN_DISABLED_EVT
+    sNfaEnableDisablePollingEvent.wait();
+  } else {
+    LOG(ERROR) << StringPrintf("%s: fail disable polling; error=0x%X", __func__,
+                               nfaStat);
+  }
+  nativeNfcTag_releaseRfInterfaceMutexLock();
+}
+
+/*******************************************************************************
+**
+** Function:        nfcManager_resetDiscoveryTech
+**
+** Description:     Restores the RF tech to the state before
+**                  nfcManager_setDiscoveryTech was called
+**
+** Returns:         None.
+**
+*******************************************************************************/
+static void nfcManager_resetDiscoveryTech(JNIEnv* e, jobject o) {
+  tNFA_STATUS nfaStat;
+  DLOG_IF(INFO, nfc_debug_enabled) << StringPrintf("%s : enter", __func__);
+
+  nativeNfcTag_acquireRfInterfaceMutexLock();
+  SyncEventGuard guard(sNfaEnableDisablePollingEvent);
+
+  nfaStat = NFA_ChangeDiscoveryTech(0xFF, 0xFF, true, true);
+
+  if (nfaStat == NFA_STATUS_OK) {
+    // wait for NFA_LISTEN_DISABLED_EVT
+    sNfaEnableDisablePollingEvent.wait();
+  } else {
+    LOG(ERROR) << StringPrintf("%s: fail disable polling; error=0x%X", __func__,
+                               nfaStat);
+  }
+  nativeNfcTag_releaseRfInterfaceMutexLock();
+}
+
 /*****************************************************************************
 **
 ** JNI functions for android-4.0.1_r1
@@ -2113,6 +2211,17 @@ static JNINativeMethod gMethods[] = {
     {"setObserveMode", "(Z)Z", (void*)nfcManager_setObserveMode},
 
     {"isMultiTag", "()Z", (void*)nfcManager_isMultiTag},
+
+    {"clearRoutingEntry", "(I)V", (void*)nfcManager_clearRoutingEntry},
+
+    {"setIsoDepProtocolRoute", "(I)V",
+     (void*)nfcManager_updateIsoDepProtocolRoute},
+
+    {"setTechnologyABRoute", "(I)V", (void*)nfcManager_updateTechnologyABRoute},
+
+    {"setDiscoveryTech", "(II)V", (void*)nfcManager_setDiscoveryTech},
+
+    {"resetDiscoveryTech", "()V", (void*)nfcManager_resetDiscoveryTech},
 };
 
 /*******************************************************************************
