@@ -457,4 +457,19 @@ public class NativeNfcManager implements DeviceHost {
         }
         mListener.onPollingLoopDetected(frame);
     }
+
+    @Override
+    public native void setDiscoveryTech(int pollTech, int listenTech);
+
+    @Override
+    public native void resetDiscoveryTech();
+
+    @Override
+    public native void clearRoutingEntry(int clearFlags);
+
+    @Override
+    public native void setIsoDepProtocolRoute(int route);
+
+    @Override
+    public native void setTechnologyABRoute(int route);
 }
