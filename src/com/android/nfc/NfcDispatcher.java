@@ -16,6 +16,8 @@
 
 package com.android.nfc;
 
+import static android.service.chooser.Flags.supportNfcResolver;
+
 import android.app.Activity;
 import android.app.ActivityManager;
 import android.app.AlertDialog;
@@ -49,6 +51,7 @@ import android.os.Messenger;
 import android.os.Process;
 import android.os.UserHandle;
 import android.os.UserManager;
+import android.service.chooser.CustomChoosers;
 import android.sysprop.NfcProperties;
 import android.util.Log;
 import android.util.proto.ProtoOutputStream;
@@ -190,7 +193,7 @@ class NfcDispatcher {
         public final Intent intent;
         public final Tag tag;
 
-        final Intent rootIntent;
+        Intent rootIntent;
         final Uri ndefUri;
         final String ndefMimeType;
         final PackageManager packageManager;
@@ -304,10 +307,17 @@ class NfcDispatcher {
             if (muteAppCount > 0) {
                 if (DBG) Log.d(TAG, "muteAppCount = " + muteAppCount);
                 if (filtered.size() > 0) {
-                    rootIntent.setClass(context, TechListChooserActivity.class);
-                    rootIntent.putExtra(Intent.EXTRA_INTENT, intent);
-                    rootIntent.putParcelableArrayListExtra(
-                            TechListChooserActivity.EXTRA_RESOLVE_INFOS, filtered);
+                    if (supportNfcResolver()) {
+                        rootIntent =
+                                CustomChoosers.createNfcResolverIntent(intent, null, filtered);
+                        rootIntent.setFlags(
+                                Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
+                    } else {
+                        rootIntent.setClass(context, TechListChooserActivity.class);
+                        rootIntent.putExtra(Intent.EXTRA_INTENT, intent);
+                        rootIntent.putParcelableArrayListExtra(
+                                TechListChooserActivity.EXTRA_RESOLVE_INFOS, filtered);
+                    }
                 }
             }
             return filtered;
@@ -452,7 +462,6 @@ class NfcDispatcher {
 
         private void logMuteApp(int uid) {
             int muteType;
-            if (DBG) Log.d(TAG, "intentAction = " + intent.getAction());
             switch (intent.getAction()) {
                 case NfcAdapter.ACTION_NDEF_DISCOVERED:
                     muteType = NfcStatsLog.NFC_TAG_OCCURRED__TYPE__APP_LAUNCH_NDEF_MUTE;
@@ -907,11 +916,18 @@ class NfcDispatcher {
             dispatch.intent.setComponent(null);
         } else if (matches.size() > 1) {
             // Multiple matches, show a custom activity chooser dialog
-            Intent intent = new Intent(mContext, TechListChooserActivity.class);
-            intent.putExtra(Intent.EXTRA_INTENT, dispatch.intent);
-            intent.putParcelableArrayListExtra(TechListChooserActivity.EXTRA_RESOLVE_INFOS,
-                    matches);
-
+            Intent intent;
+            if (supportNfcResolver()) {
+                intent = CustomChoosers.createNfcResolverIntent(
+                        dispatch.intent, null, matches);
+                intent.setFlags(
+                        Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
+            } else {
+                intent = new Intent(mContext, TechListChooserActivity.class);
+                intent.putExtra(Intent.EXTRA_INTENT, dispatch.intent);
+                intent.putParcelableArrayListExtra(TechListChooserActivity.EXTRA_RESOLVE_INFOS,
+                        matches);
+            }
             if (DBG) Log.i(TAG, "matched multiple TECH");
             NfcStatsLog.write(NfcStatsLog.NFC_READER_CONFLICT_OCCURRED);
             return dispatch.tryStartActivity(intent);
