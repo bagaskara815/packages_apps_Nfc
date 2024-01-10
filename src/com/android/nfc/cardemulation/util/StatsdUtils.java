@@ -17,6 +17,7 @@ package com.android.nfc.cardemulation.util;
 
 import android.annotation.FlaggedApi;
 import android.nfc.cardemulation.CardEmulation;
+import android.os.SystemClock;
 import android.sysprop.NfcProperties;
 import android.util.Log;
 
@@ -61,8 +62,8 @@ public class StatsdUtils {
 
     /** Name of SE terminal to log in statsd */
     private String mSeName = "";
-    /** Flag to indicate that the service has not been bound */
-    private boolean mWaitingForServiceBound = false;
+    /** Timestamp in millis when app binding starts */
+    private long mBindingStartTimeMillis = 0;
     /** Flag to indicate that the service has not sent the first response */
     private boolean mWaitingForFirstResponse = false;
     /** Current transaction's category to log in statsd */
@@ -86,7 +87,7 @@ public class StatsdUtils {
     public StatsdUtils() {}
 
     private void resetCardEmulationEvent() {
-        mWaitingForServiceBound = false;
+        mBindingStartTimeMillis = 0;
         mWaitingForFirstResponse = false;
         mTransactionCategory = CardEmulation.EXTRA_CATEGORY;
         mTransactionUid = -1;
@@ -147,6 +148,14 @@ public class StatsdUtils {
         resetCardEmulationEvent();
     }
 
+    public void logErrorEvent(int errorType, int nciCmd, int ntfStatusCode) {
+        NfcStatsLog.write(NfcStatsLog.NFC_ERROR_OCCURRED, errorType, nciCmd, ntfStatusCode);
+    }
+
+    public void logErrorEvent(int errorType) {
+        logErrorEvent(errorType, 0, 0);
+    }
+
     public void setCardEmulationEventCategory(String category) {
         mTransactionCategory = category;
     }
@@ -164,11 +173,19 @@ public class StatsdUtils {
     }
 
     public void notifyCardEmulationEventWaitingForService() {
-        mWaitingForServiceBound = true;
+        mBindingStartTimeMillis = SystemClock.elapsedRealtime();
     }
 
     public void notifyCardEmulationEventServiceBound() {
-        mWaitingForServiceBound = false;
+        int bindingLimitMillis = 500;
+        if (mBindingStartTimeMillis > 0) {
+            long bindingElapsedTimeMillis = SystemClock.elapsedRealtime() - mBindingStartTimeMillis;
+            if (DBG) Log.d(TAG, "binding took " + bindingElapsedTimeMillis + " millis");
+            if (bindingElapsedTimeMillis >= bindingLimitMillis) {
+                logErrorEvent(NfcStatsLog.NFC_ERROR_OCCURRED__TYPE__HCE_LATE_BINDING);
+            }
+            mBindingStartTimeMillis = 0;
+        }
     }
 
     public void logCardEmulationWrongSettingEvent() {
@@ -192,7 +209,7 @@ public class StatsdUtils {
         }
 
         StatsdResult transactionResult;
-        if (mWaitingForServiceBound) {
+        if (mBindingStartTimeMillis > 0) {
             transactionResult = StatsdResult.DISCONNECTED_BEFORE_BOUND;
         } else if (mWaitingForFirstResponse) {
             transactionResult = StatsdResult.DISCONNECTED_BEFORE_RESPONSE;
