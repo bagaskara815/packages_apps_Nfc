@@ -452,7 +452,6 @@ class NfcDispatcher {
 
         private void logMuteApp(int uid) {
             int muteType;
-            if (DBG) Log.d(TAG, "intentAction = " + intent.getAction());
             switch (intent.getAction()) {
                 case NfcAdapter.ACTION_NDEF_DISCOVERED:
                     muteType = NfcStatsLog.NFC_TAG_OCCURRED__TYPE__APP_LAUNCH_NDEF_MUTE;
