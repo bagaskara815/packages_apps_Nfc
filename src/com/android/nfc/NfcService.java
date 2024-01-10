@@ -25,6 +25,7 @@ import android.app.PendingIntent;
 import android.app.VrManager;
 import android.app.admin.DevicePolicyManager;
 import android.app.backup.BackupManager;
+import android.app.role.RoleManager;
 import android.content.BroadcastReceiver;
 import android.content.ComponentName;
 import android.content.ContentResolver;
@@ -86,6 +87,7 @@ import android.os.UserManager;
 import android.os.VibrationAttributes;
 import android.os.VibrationEffect;
 import android.os.Vibrator;
+import android.permission.flags.Flags;
 import android.provider.Settings;
 import android.provider.Settings.SettingNotFoundException;
 import android.se.omapi.ISecureElementService;
@@ -1495,10 +1497,12 @@ public class NfcService implements DeviceHostListener, ForegroundUtils.Callback 
         @Override
         public boolean setObserveMode(boolean enable) {
             long token = Binder.clearCallingIdentity();
+            boolean isWalletRoleEnabled = false;
             try {
                 if (!android.nfc.Flags.nfcObserveMode()) {
                     return false;
                 }
+                isWalletRoleEnabled = android.permission.flags.Flags.walletRoleEnabled();
             } finally {
                 Binder.restoreCallingIdentity(token);
             }
@@ -1508,14 +1512,25 @@ public class NfcService implements DeviceHostListener, ForegroundUtils.Callback 
             // Allow non-foreground callers with system uid or default payment service.
             String packageName = getPackageNameFromUid(callingUid);
             if (packageName != null) {
-                String defaultPaymentService = Settings.Secure.getString(
-                    mContext.createContextAsUser(user, 0).getContentResolver(),
-                Constants.SETTINGS_SECURE_NFC_PAYMENT_DEFAULT_COMPONENT);
-                if (defaultPaymentService != null) {
-                    String defaultPaymentPackage =
-                        ComponentName.unflattenFromString(defaultPaymentService).getPackageName();
-                    privilegedCaller = (callingUid == Process.SYSTEM_UID
-                            || packageName.equals(defaultPaymentPackage));
+                if (isWalletRoleEnabled) {
+                    RoleManager roleManager = mContext.getSystemService(RoleManager.class);
+                    if (roleManager.isRoleHeld(RoleManager.ROLE_WALLET)) {
+                        String defaultWalletPackage = roleManager
+                                .getRoleHoldersAsUser(RoleManager.ROLE_WALLET, user).get(0);
+                        privilegedCaller = (callingUid == Process.SYSTEM_UID
+                                || packageName.equals(defaultWalletPackage));
+                    }
+                } else {
+                    String defaultPaymentService = Settings.Secure.getString(
+                            mContext.createContextAsUser(user, 0).getContentResolver(),
+                            Constants.SETTINGS_SECURE_NFC_PAYMENT_DEFAULT_COMPONENT);
+                    if (defaultPaymentService != null) {
+                        String defaultPaymentPackage =
+                                ComponentName.unflattenFromString(defaultPaymentService)
+                                        .getPackageName();
+                        privilegedCaller = (callingUid == Process.SYSTEM_UID
+                                || packageName.equals(defaultPaymentPackage));
+                    }
                 }
             } else {
                 privilegedCaller = (callingUid == Process.SYSTEM_UID);
