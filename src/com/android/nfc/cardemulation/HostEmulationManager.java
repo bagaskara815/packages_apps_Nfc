@@ -295,6 +295,10 @@ public class HostEmulationManager {
                     // Just ignore all future APDUs until we resolve to only one
                     mState = STATE_W4_DEACTIVATE;
                     NfcStatsLog.write(NfcStatsLog.NFC_AID_CONFLICT_OCCURRED, selectAid);
+                    if (mStatsdUtils != null) {
+                        mStatsdUtils.setCardEmulationEventCategory(CardEmulation.CATEGORY_OTHER);
+                        mStatsdUtils.logCardEmulationWrongSettingEvent();
+                    }
                     launchResolver((ArrayList<ApduServiceInfo>)resolveInfo.services, null,
                             resolveInfo.category);
                     return;
