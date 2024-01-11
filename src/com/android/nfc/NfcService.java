@@ -233,6 +233,8 @@ public class NfcService implements DeviceHostListener, ForegroundUtils.Callback 
 
     public static boolean sIsShortRecordLayout = false;
 
+    public static boolean sIsNfcRestore = false;
+
     // for use with playSound()
     public static final int SOUND_START = 0;
     public static final int SOUND_END = 1;
@@ -1009,6 +1011,12 @@ public class NfcService implements DeviceHostListener, ForegroundUtils.Callback 
             switch (params[0].intValue()) {
                 case TASK_ENABLE:
                     enableInternal();
+                    if (sIsNfcRestore && mIsTagAppPrefSupported) {
+                        synchronized (NfcService.this) {
+                            initTagAppPrefList();
+                            sIsNfcRestore = false;
+                        }
+                    }
                     break;
                 case TASK_DISABLE:
                     disableInternal();
