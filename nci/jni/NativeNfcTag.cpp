@@ -34,6 +34,7 @@
 #include "nfa_api.h"
 #include "nfa_rw_api.h"
 #include "nfc_brcm_defs.h"
+#include "nfc_config.h"
 #include "rw_api.h"
 
 using android::base::StringPrintf;
@@ -1385,10 +1386,13 @@ static jboolean nativeNfcTag_doPresenceCheck(JNIEnv*, jobject) {
            (sCurrentConnectedTargetProtocol == NFC_PROTOCOL_T3T))) {
         sPresCheckErrCnt++;
 
-        while (sPresCheckErrCnt <= 3) {
+        int retryCount =
+            NfcConfig::getUnsigned(NAME_PRESENCE_CHECK_RETRY_COUNT,
+                                   DEFAULT_PRESENCE_CHECK_RETRY_COUNT);
+        while (sPresCheckErrCnt <= retryCount) {
           DLOG_IF(INFO, nfc_debug_enabled) << StringPrintf(
-              "%s(%d): pres check failed, try again (attempt #%d/3)",
-              __FUNCTION__, __LINE__, sPresCheckErrCnt);
+              "%s(%d): pres check failed, try again (attempt #%d/%d)",
+              __FUNCTION__, __LINE__, sPresCheckErrCnt, retryCount);
 
           status = NFA_RwPresenceCheck(method);
 
