@@ -36,6 +36,7 @@ import android.os.ParcelFileDescriptor;
 import android.os.UserHandle;
 import android.os.UserManager;
 import android.sysprop.NfcProperties;
+import android.text.TextUtils;
 import android.util.AtomicFile;
 import android.util.Log;
 import android.util.SparseArray;
@@ -44,7 +45,6 @@ import android.util.proto.ProtoOutputStream;
 
 import com.android.internal.annotations.GuardedBy;
 import com.android.internal.util.FastXmlSerializer;
-import com.android.internal.util.XmlUtils;
 
 import org.xmlpull.v1.XmlPullParser;
 import org.xmlpull.v1.XmlPullParserException;
@@ -478,6 +478,22 @@ public class RegisteredServicesCache {
             }
         }
     }
+
+    private static final boolean convertValueToBoolean(CharSequence value, boolean defaultValue) {
+       boolean result = false;
+
+        if (TextUtils.isEmpty(value)) {
+            return defaultValue;
+        }
+
+        if (value.equals("1")
+        ||  value.equals("true")
+        ||  value.equals("TRUE"))
+            result = true;
+
+        return result;
+    }
+
     private void readDynamicSettingsLocked() {
         FileInputStream fis = null;
         try {
@@ -519,8 +535,7 @@ public class RegisteredServicesCache {
                                     currentOffHostSE = offHostString;
                                     inService = true;
                                     defaultToObserveMode =
-                                        XmlUtils.convertValueToBoolean(defaultToObserveModeStr,
-                                        false);
+                                        convertValueToBoolean(defaultToObserveModeStr, false);
                                 } catch (NumberFormatException e) {
                                     Log.e(TAG, "Could not parse service uid");
                                 }
@@ -621,7 +636,8 @@ public class RegisteredServicesCache {
                             // See if we have a valid service
                             if (currentComponent != null && currentUid >= 0) {
                                 Log.d(TAG, " end of service tag");
-                                final int userId = UserHandle.getUserId(currentUid);
+                                final int userId =
+                                    UserHandle.getUserHandleForUid(currentUid).getIdentifier();
                                 OtherServiceStatus status =
                                         new OtherServiceStatus(currentUid, checked);
                                 Log.d(TAG, " ## user id - " + userId);

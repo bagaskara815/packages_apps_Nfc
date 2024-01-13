@@ -30,7 +30,7 @@ android_app_certificate {
 apex {
     name: "com.android.nfcservices",
     manifest: "manifest.json",
-    // apps: ["NfcNci"],
+    apps: ["NfcNciApex"],
     multilib: {
        first: {
            // Extractor process runs only with the primary ABI.
