@@ -44,10 +44,9 @@ public class WalletRoleObserver {
             if (!roleName.equals(RoleManager.ROLE_WALLET)) {
                 return;
             }
-            List<String> roleHolder = mRoleManager.getRoleHolders(RoleManager.ROLE_WALLET);
-            if(!roleHolder.isEmpty()) {
-                callback.onWalletRoleHolderChanged(roleHolder.get((0)), user.getIdentifier());
-            }
+            List<String> roleHolders = roleManager.getRoleHolders(RoleManager.ROLE_WALLET);
+            String roleHolder = roleHolders.isEmpty() ? null : roleHolders.get(0);
+            callback.onWalletRoleHolderChanged(roleHolder, user.getIdentifier());
         };
         this.mRoleManager.addOnRoleHoldersChangedListenerAsUser(context.getMainExecutor(),
                 mOnRoleHoldersChangedListener, UserHandle.ALL);
