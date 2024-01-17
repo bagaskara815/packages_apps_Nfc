@@ -29,17 +29,6 @@ java_library {
 
 java_defaults {
     name: "NfcNciDefaults",
-    libs: [
-        "framework-annotations-lib",
-        "framework-bluetooth",
-        "framework-configinfrastructure",
-        "framework-nfc.impl",
-        "framework-permission-s",
-        "framework-permission",
-        "framework-statsd.stubs.module_lib",
-        "framework-wifi",
-        "unsupportedappusage"
-    ],
     static_libs: [
         "android.se.omapi-V1-java",
         "android.nfc.flags-aconfig-java",
@@ -66,16 +55,23 @@ java_defaults {
 android_app {
     name: "NfcNci",
     defaults: ["NfcNciDefaults"],
-    platform_apis: true,
     certificate: "platform",
+    sdk_version: "core_platform",
     srcs: [
         "src/**/*.java",
         "shim_src/non_apex/**/*.java",
         "nci/**/*.java",
         ":framework-nfc-javastream-protos",
-        // TODO(b/263565193): Temp hack until NFC APK can link against module_current.
-        ":framework-nfc-updatable-sources",
         ":statslog-Nfc-java-gen",
+    ],
+    libs: [
+        // order matters: classes in framework-nfc are resolved before framework, meaning
+        // @hide APIs in framework-nfc are resolved before @SystemApi stubs in framework
+        "framework-nfc.impl",
+        "framework",
+
+        // if sdk_version="" this gets automatically included, but here we need to add manually.
+        "framework-res",
     ],
     jni_libs: ["libnfc_nci_jni"],
 }
@@ -93,6 +89,17 @@ android_app {
         "nci/**/*.java",
         ":framework-nfc-javastream-protos",
         ":statslog-Nfc-java-gen",
+    ],
+    libs: [
+        "framework-annotations-lib",
+        "framework-bluetooth",
+        "framework-configinfrastructure",
+        "framework-nfc.impl",
+        "framework-permission-s",
+        "framework-permission",
+        "framework-statsd.stubs.module_lib",
+        "framework-wifi",
+        "unsupportedappusage"
     ],
     apex_available: [
         "//apex_available:platform",
