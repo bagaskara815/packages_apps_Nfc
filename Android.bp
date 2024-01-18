@@ -105,6 +105,9 @@ android_app {
         "//apex_available:platform",
         "com.android.nfcservices"
     ],
+    lint: {
+        baseline_filename: "lint-baseline.xml",
+    },
 }
 
 filegroup {
