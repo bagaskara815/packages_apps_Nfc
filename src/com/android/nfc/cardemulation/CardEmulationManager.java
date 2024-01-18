@@ -936,8 +936,10 @@ public class CardEmulationManager implements RegisteredServicesCache.Callback,
 
         ComponentName paymentService = getDefaultServiceForCategory(userId,
                     CardEmulation.CATEGORY_PAYMENT, false);
-        NfcManager manager = mContext.getSystemService(NfcManager.class);
-        NfcAdapter adapter = manager.getDefaultAdapter();
+        NfcAdapter adapter = NfcAdapter.getDefaultAdapter(mContext);
+        if (adapter == null) {
+            return;
+        }
         if (mServiceCache.doesServiceDefaultToObserveMode(userId,
             service != null ? service : paymentService)) {
             adapter.disallowTransaction();
