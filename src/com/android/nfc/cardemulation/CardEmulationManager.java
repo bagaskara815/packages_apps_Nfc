@@ -15,6 +15,8 @@
  */
 package com.android.nfc.cardemulation;
 
+import android.annotation.TargetApi;
+import android.annotation.FlaggedApi;
 import android.app.ActivityManager;
 import android.app.role.RoleManager;
 import android.content.ComponentName;
@@ -153,6 +155,8 @@ public class CardEmulationManager implements RegisteredServicesCache.Callback,
         return mNfcFCardEmulationInterface;
     }
 
+    @TargetApi(35)
+    @FlaggedApi(android.nfc.Flags.FLAG_NFC_READ_POLLING_LOOP)
     public void onPollingLoopDetected(Bundle pollingFrame) {
         mHostEmulationManager.onPollingLoopDetected(pollingFrame);
     }
@@ -309,7 +313,9 @@ public class CardEmulationManager implements RegisteredServicesCache.Callback,
         mAidCache.onServicesUpdated(userId, services);
         // Update the preferred services list
         mPreferredServices.onServicesUpdated();
-
+        if (android.nfc.Flags.nfcReadPollingLoop()) {
+            mHostEmulationManager.updatePollingLoopFilters(userId, services);
+        }
         NfcService.getInstance().onPreferredPaymentChanged(NfcAdapter.PREFERRED_PAYMENT_UPDATED);
     }
 
@@ -586,6 +592,7 @@ public class CardEmulationManager implements RegisteredServicesCache.Callback,
             NfcPermissions.validateUserId(userId);
             NfcPermissions.enforceUserPermissions(mContext);
             if (!isServiceRegistered(userId, service)) {
+                Log.e(TAG, "service ("+ service + ") isn't registed for user " + userId);
                 return false;
             }
             if (!mServiceCache.registerAidGroupForService(userId, Binder.getCallingUid(), service,
@@ -595,6 +602,21 @@ public class CardEmulationManager implements RegisteredServicesCache.Callback,
             NfcService.getInstance().onPreferredPaymentChanged(
                     NfcAdapter.PREFERRED_PAYMENT_UPDATED);
             return true;
+        }
+
+        @Override
+        @TargetApi(35)
+        @FlaggedApi(android.nfc.Flags.FLAG_NFC_READ_POLLING_LOOP)
+        public boolean registerPollingLoopFilterForService(int userId,
+                ComponentName service, String pollingLoopFilter) throws RemoteException {
+            NfcPermissions.validateUserId(userId);
+            NfcPermissions.enforceUserPermissions(mContext);
+            if (!isServiceRegistered(userId, service)) {
+                Log.e(TAG, "service ("+ service + ") isn't registed for user " + userId);
+                return false;
+            }
+            return mServiceCache.registerPollingLoopFilterForService(userId, Binder.getCallingUid(),
+            service, pollingLoopFilter);
         }
 
         @Override
@@ -936,8 +958,10 @@ public class CardEmulationManager implements RegisteredServicesCache.Callback,
 
         ComponentName paymentService = getDefaultServiceForCategory(userId,
                     CardEmulation.CATEGORY_PAYMENT, false);
-        NfcManager manager = mContext.getSystemService(NfcManager.class);
-        NfcAdapter adapter = manager.getDefaultAdapter();
+        NfcAdapter adapter = NfcAdapter.getDefaultAdapter(mContext);
+        if (adapter == null) {
+            return;
+        }
         if (mServiceCache.doesServiceDefaultToObserveMode(userId,
             service != null ? service : paymentService)) {
             adapter.disallowTransaction();

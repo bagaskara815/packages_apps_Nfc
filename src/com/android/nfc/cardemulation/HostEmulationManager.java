@@ -16,6 +16,9 @@
 
 package com.android.nfc.cardemulation;
 
+import android.annotation.TargetApi;
+import android.annotation.FlaggedApi;
+import android.app.ActivityManager;
 import android.app.KeyguardManager;
 import android.content.ComponentName;
 import android.content.Context;
@@ -50,7 +53,13 @@ import com.android.nfc.flags.Flags;
 import java.io.FileDescriptor;
 import java.io.PrintWriter;
 import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.HexFormat;
+import java.util.List;
+import java.util.Locale;
+import java.util.Map;
 import java.util.Objects;
+import java.util.TreeMap;
 
 public class HostEmulationManager {
     static final String TAG = "HostEmulationManager";
@@ -100,6 +109,7 @@ public class HostEmulationManager {
     ComponentName mServiceName = null;
     int mServiceUserId; // The UserId of the non-payment service
     ArrayList<Bundle> mPendingPollingLoopFrames = null;
+    private Map<Integer, Map<String, List<ApduServiceInfo>>> mPollingLoopFilters;
 
     // Variables below are for a payment service,
     // which is typically bound persistently to improve on
@@ -130,6 +140,7 @@ public class HostEmulationManager {
         mKeyguard = context.getSystemService(KeyguardManager.class);
         mPowerManager = context.getSystemService(PowerManager.class);
         mStatsdUtils = Flags.statsdCeEventsFlag() ? new StatsdUtils(StatsdUtils.SE_NAME_HCE) : null;
+        mPollingLoopFilters = new HashMap<Integer, Map<String, List<ApduServiceInfo>>>();
     }
 
     /**
@@ -150,33 +161,107 @@ public class HostEmulationManager {
     private Messenger getForegroundServiceOrDefault() {
         PackageManager packageManager = mContext.getPackageManager();
         ComponentName preferredServiceName = mAidCache.getPreferredService();
-        try {
-            ApplicationInfo preferredServiceInfo =
-                packageManager.getApplicationInfo(preferredServiceName.getPackageName(), 0);
-            UserHandle user = UserHandle.getUserHandleForUid(preferredServiceInfo.uid);
-            return bindServiceIfNeededLocked(user.getIdentifier(), preferredServiceName);
-        } catch (NameNotFoundException nnfe) {
-            Log.e(TAG, "Packange name not found, dropping polling frame", nnfe);
-            unbindServiceIfNeededLocked();
+        if (preferredServiceName != null) {
+            try {
+                ApplicationInfo preferredServiceInfo =
+                    packageManager.getApplicationInfo(preferredServiceName.getPackageName(), 0);
+                UserHandle user = UserHandle.getUserHandleForUid(preferredServiceInfo.uid);
+                return bindServiceIfNeededLocked(user.getIdentifier(), preferredServiceName);
+            } catch (NameNotFoundException nnfe) {
+                Log.e(TAG, "Packange name not found, dropping polling frame", nnfe);
+                unbindServiceIfNeededLocked();
+            }
         }
         return bindServiceIfNeededLocked(mPaymentServiceUserId, mPaymentServiceName);
     }
 
+    @TargetApi(35)
+    @FlaggedApi(android.nfc.Flags.FLAG_NFC_READ_POLLING_LOOP)
+    public void updatePollingLoopFilters(int userId, List<ApduServiceInfo> services) {
+        TreeMap<String, List<ApduServiceInfo>> pollingLoopFilters =
+                new TreeMap<String, List<ApduServiceInfo>>();
+        for (ApduServiceInfo serviceInfo : services) {
+            for (String plf : serviceInfo.getPollingLoopFilters()) {
+                if (pollingLoopFilters.containsKey(plf)) {
+                    pollingLoopFilters.get(plf).add(serviceInfo);
+                } else {
+                    ArrayList<ApduServiceInfo> list =  new ArrayList<ApduServiceInfo>(1);
+                    list.add(serviceInfo);
+                    pollingLoopFilters.put(plf, list);
+                }
+            }
+        }
+        mPollingLoopFilters.put(Integer.valueOf(userId), pollingLoopFilters);
+    }
+
+    @TargetApi(35)
+    @FlaggedApi(android.nfc.Flags.FLAG_NFC_READ_POLLING_LOOP)
     public void onPollingLoopDetected(Bundle pollingFrame) {
         synchronized (mLock) {
             if (mState == STATE_IDLE) {
                 mState = STATE_POLLING_LOOP;
             }
-            Messenger service = getForegroundServiceOrDefault();
-            if (service != null) {
-                ArrayList<Bundle> frames = new ArrayList<Bundle>();
-                frames.add(pollingFrame);
-                sendPollingFramesToServiceLocked(service, frames);
-            } else {
-                if (mPendingPollingLoopFrames == null) {
-                    mPendingPollingLoopFrames = new ArrayList<Bundle>(1);
+            Messenger service = null;
+            if (pollingFrame.getChar(HostApduService.POLLING_LOOP_TYPE_KEY)
+                    == HostApduService.POLLING_LOOP_TYPE_UNKNOWN) {
+                byte[] data = pollingFrame.getByteArray(HostApduService.POLLING_LOOP_DATA_KEY);
+                String dataStr = HexFormat.of().formatHex(data).toUpperCase(Locale.ROOT);
+                List<ApduServiceInfo> serviceInfos =
+                        mPollingLoopFilters.get(ActivityManager.getCurrentUser()).get(dataStr);
+                if (serviceInfos != null && serviceInfos.size() > 0) {
+                    ApduServiceInfo serviceInfo;
+                    if (serviceInfos.size() == 1) {
+                        serviceInfo = serviceInfos.get(0);
+                    } else {
+                        serviceInfo = mAidCache.resolvePollingLoopFilterConflict(serviceInfos);
+                        if (serviceInfo == null) {
+                            /*  If neither the foreground or payments service can handle the plf,
+                             *  pick the first in the list. */
+                            serviceInfo = serviceInfos.get(0);
+                        }
+                    }
+                    UserHandle user = UserHandle.getUserHandleForUid(serviceInfo.getUid());
+                    service = bindServiceIfNeededLocked(user.getIdentifier(),
+                            serviceInfo.getComponent());
+                } else {
+                    service = getForegroundServiceOrDefault();
                 }
-                mPendingPollingLoopFrames.add(pollingFrame);
+            } else {
+                if (mActiveService != null) {
+                    service = mActiveService;
+                } else if (mPendingPollingLoopFrames != null) {
+                    char type = pollingFrame.getChar(HostApduService.POLLING_LOOP_TYPE_KEY);
+                    int onCount = type == HostApduService.POLLING_LOOP_TYPE_ON ? 1 : 0;
+                    int offCount = type == HostApduService.POLLING_LOOP_TYPE_OFF ? 1 : 0;
+                    if (onCount == 1 || offCount == 1) {
+                        for (Bundle frame : mPendingPollingLoopFrames) {
+                            type = frame.getChar(HostApduService.POLLING_LOOP_TYPE_KEY);
+                            switch (type) {
+                                case HostApduService.POLLING_LOOP_TYPE_ON:
+                                    onCount++;
+                                    break;
+                                case HostApduService.POLLING_LOOP_TYPE_OFF:
+                                    offCount++;
+                                    break;
+                                default:
+                            }
+                        }
+                        if (onCount >=2 && offCount >=2) {
+                            service = getForegroundServiceOrDefault();
+                        } else {
+                            service = null;
+                        }
+                    }
+                }
+            }
+
+            if (mPendingPollingLoopFrames == null) {
+                mPendingPollingLoopFrames = new ArrayList<Bundle>(1);
+            }
+            mPendingPollingLoopFrames.add(pollingFrame);
+            if (service != null) {
+                sendPollingFramesToServiceLocked(service, mPendingPollingLoopFrames);
+                mPendingPollingLoopFrames = null;
             }
         }
     }
@@ -195,7 +280,6 @@ public class HostEmulationManager {
      }
 
     public void onHostEmulationActivated() {
-        Log.d(TAG, "notifyHostEmulationActivated");
         synchronized (mLock) {
             // Regardless of what happens, if we're having a tap again
             // activity up, close it
@@ -384,6 +468,7 @@ public class HostEmulationManager {
             mActiveService = null;
             mActiveServiceName = null;
             mActiveServiceUserId = -1;
+            mPendingPollingLoopFrames = null;
             unbindServiceIfNeededLocked();
             mState = STATE_IDLE;
 
@@ -415,6 +500,10 @@ public class HostEmulationManager {
     }
 
     Messenger bindServiceIfNeededLocked(int userId, ComponentName service) {
+        if (service == null) {
+            Log.e(TAG, "service ComponentName is null");
+            return null;
+        }
         if (mPaymentServiceName != null && mPaymentServiceName.equals(service)
                 && mPaymentServiceUserId == userId) {
             Log.d(TAG, "Service already bound as payment service.");
@@ -643,6 +732,8 @@ public class HostEmulationManager {
                 } else if (mPendingPollingLoopFrames != null) {
                     sendPollingFramesToServiceLocked(mService, mPendingPollingLoopFrames);
                     mPendingPollingLoopFrames = null;
+                } else {
+                    Log.d(TAG, "bound with nothing to send");
                 }
             }
         }

@@ -1496,30 +1496,29 @@ public class NfcService implements DeviceHostListener, ForegroundUtils.Callback 
 
         @Override
         public boolean setObserveMode(boolean enable) {
+            int callingUid = Binder.getCallingUid();
+            UserHandle user = Binder.getCallingUserHandle();
             long token = Binder.clearCallingIdentity();
             boolean isWalletRoleEnabled = false;
+            String defaultWalletPackage = null;
             try {
                 if (!android.nfc.Flags.nfcObserveMode()) {
                     return false;
                 }
                 isWalletRoleEnabled = android.permission.flags.Flags.walletRoleEnabled();
+                if (isWalletRoleEnabled) {
+                    defaultWalletPackage = getWalletRoleHolder(user);
+                }
             } finally {
                 Binder.restoreCallingIdentity(token);
             }
             boolean privilegedCaller = false;
-            int callingUid = Binder.getCallingUid();
-            UserHandle user = Binder.getCallingUserHandle();
             // Allow non-foreground callers with system uid or default payment service.
             String packageName = getPackageNameFromUid(callingUid);
             if (packageName != null) {
                 if (isWalletRoleEnabled) {
-                    RoleManager roleManager = mContext.getSystemService(RoleManager.class);
-                    if (roleManager.isRoleHeld(RoleManager.ROLE_WALLET)) {
-                        String defaultWalletPackage = roleManager
-                                .getRoleHoldersAsUser(RoleManager.ROLE_WALLET, user).get(0);
-                        privilegedCaller = (callingUid == Process.SYSTEM_UID
-                                || packageName.equals(defaultWalletPackage));
-                    }
+                    privilegedCaller = (callingUid == Process.SYSTEM_UID
+                            || packageName.equals(defaultWalletPackage));
                 } else {
                     String defaultPaymentService = Settings.Secure.getString(
                             mContext.createContextAsUser(user, 0).getContentResolver(),
@@ -1543,6 +1542,13 @@ public class NfcService implements DeviceHostListener, ForegroundUtils.Callback 
                 }
             }
             return mDeviceHost.setObserveMode(enable);
+        }
+
+        private String getWalletRoleHolder(UserHandle user) {
+            RoleManager roleManager = mContext.createContextAsUser(user, 0)
+                    .getSystemService(RoleManager.class);
+            List<String> roleHolders = roleManager.getRoleHolders(RoleManager.ROLE_WALLET);
+            return roleHolders.isEmpty() ? null : roleHolders.get(0);
         }
 
         @Override
@@ -2168,6 +2174,24 @@ public class NfcService implements DeviceHostListener, ForegroundUtils.Callback 
             NfcPermissions.enforceAdminPermissions(mContext);
 
             mWlcStateListener.remove(listener);
+        }
+
+        @Override
+        public void notifyPollingLoop(Bundle frame) {
+            try {
+                onPollingLoopDetected(frame);
+            } catch (Exception ex) {
+                Log.e(TAG, "error when notifying polling loop", ex);
+            }
+        }
+
+        @Override
+        public void notifyHceDeactivated() {
+            try {
+                mCardEmulationManager.onHostCardEmulationDeactivated(1);
+            } catch (Exception ex) {
+                Log.e(TAG, "error when notifying HCE deactivated", ex);
+            }
         }
     }
 
