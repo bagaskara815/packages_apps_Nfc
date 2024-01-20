@@ -83,6 +83,7 @@ android_app {
     defaults: ["NfcNciDefaults"],
     min_sdk_version: "34", // should be 35 (making it 34 for compiling for `-next`)
     sdk_version: "module_current",
+    certificate: "nfc",
     srcs: [
         "src/**/*.java",
         "shim_src/apex/**/*.java",
