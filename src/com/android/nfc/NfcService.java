@@ -65,7 +65,7 @@ import android.nfc.NfcAntennaInfo;
 import android.nfc.Tag;
 import android.nfc.TechListParcel;
 import android.nfc.TransceiveResult;
-import android.nfc.WlcLDeviceInfo;
+import android.nfc.WlcListenerDeviceInfo;
 import android.nfc.tech.Ndef;
 import android.nfc.tech.TagTechnology;
 import android.os.AsyncTask;
@@ -366,7 +366,7 @@ public class NfcService implements DeviceHostListener, ForegroundUtils.Callback 
     boolean mIsWlcCapable;
     boolean mIsWlcEnabled;
     boolean mIsRWCapable;
-    WlcLDeviceInfo mWlcLDeviceInfo;
+    WlcListenerDeviceInfo mWlcListenerDeviceInfo;
 
     // polling delay control variables
     private final int mPollDelayTime;
@@ -521,14 +521,14 @@ public class NfcService implements DeviceHostListener, ForegroundUtils.Callback 
             Log.d(TAG, " onWlcData  " + key + " =  " + WlcDeviceInfo.get(key));
         }
         synchronized (mWlcStateListener) {
-            mWlcLDeviceInfo = new WlcLDeviceInfo(
+            mWlcListenerDeviceInfo = new WlcListenerDeviceInfo(
                     WlcDeviceInfo.get(mNfcCharging.VendorId),
                     WlcDeviceInfo.get(mNfcCharging.TemperatureListener),
                     WlcDeviceInfo.get(mNfcCharging.BatteryLevel),
                     WlcDeviceInfo.get(mNfcCharging.State));
             for (INfcWlcStateListener listener : mWlcStateListener) {
                 try {
-                    listener.onWlcStateChanged(mWlcLDeviceInfo);
+                    listener.onWlcStateChanged(mWlcListenerDeviceInfo);
                 } catch (RemoteException e) {
                     Log.e(TAG, "error in onWlcData");
                 }
@@ -1951,13 +1951,13 @@ public class NfcService implements DeviceHostListener, ForegroundUtils.Callback 
         }
 
         @Override
-        public boolean enableWlc(boolean enable) {
+        public boolean setWlcEnabled(boolean enable) {
             if (!mIsWlcCapable) {
                 return false;
             }
             NfcPermissions.enforceAdminPermissions(mContext);
             // enable or disable WLC
-            if (DBG) Log.d(TAG, "enableWlc: " + enable);
+            if (DBG) Log.d(TAG, "setWlcEnabled: " + enable);
             synchronized (NfcService.this) {
                 // check whether NFC is enabled
                 if (!isNfcEnabled()) {
@@ -1983,12 +1983,12 @@ public class NfcService implements DeviceHostListener, ForegroundUtils.Callback 
         }
 
         @Override
-        public WlcLDeviceInfo getWlcLDeviceInfo() {
+        public WlcListenerDeviceInfo getWlcListenerDeviceInfo() {
             if (!mIsWlcCapable) {
                 return null;
             }
             synchronized (NfcService.this) {
-                return mWlcLDeviceInfo;
+                return mWlcListenerDeviceInfo;
             }
         }
 
