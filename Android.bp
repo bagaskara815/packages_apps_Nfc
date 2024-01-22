@@ -39,6 +39,7 @@ java_defaults {
         "bluetooth-protos-nfc-enums-java-gen",
         "com.google.android.material_material",
         "modules-utils-fastxmlserializer",
+        "modules-utils-shell-command-handler",
         "PlatformProperties",
         "nfc_flags_lib",
     ],
