@@ -1457,6 +1457,11 @@ public class NfcService implements DeviceHostListener, ForegroundUtils.Callback 
     }
 
     final class NfcAdapterService extends INfcAdapter.Stub {
+        private boolean isPrivileged(int callingUid) {
+            // Check for root uid to help invoking privileged APIs from rooted shell only.
+            return callingUid == Process.SYSTEM_UID || callingUid == Process.ROOT_UID;
+        }
+
         @Override
         public boolean enable() throws RemoteException {
             NfcPermissions.enforceAdminPermissions(mContext);
@@ -1519,7 +1524,7 @@ public class NfcService implements DeviceHostListener, ForegroundUtils.Callback 
             String packageName = getPackageNameFromUid(callingUid);
             if (packageName != null) {
                 if (isWalletRoleEnabled) {
-                    privilegedCaller = (callingUid == Process.SYSTEM_UID
+                    privilegedCaller = (isPrivileged(callingUid)
                             || packageName.equals(defaultWalletPackage));
                 } else {
                     String defaultPaymentService = Settings.Secure.getString(
@@ -1534,7 +1539,7 @@ public class NfcService implements DeviceHostListener, ForegroundUtils.Callback 
                     }
                 }
             } else {
-                privilegedCaller = (callingUid == Process.SYSTEM_UID);
+                privilegedCaller = isPrivileged(callingUid);
             }
             if (!privilegedCaller) {
                 NfcPermissions.enforceUserPermissions(mContext);
@@ -1795,10 +1800,10 @@ public class NfcService implements DeviceHostListener, ForegroundUtils.Callback 
             // Allow non-foreground callers with system uid or systemui
             String packageName = getPackageNameFromUid(callingUid);
             if (packageName != null) {
-                privilegedCaller = (callingUid == Process.SYSTEM_UID
+                privilegedCaller = (isPrivileged(callingUid)
                         || packageName.equals(SYSTEM_UI));
             } else {
-                privilegedCaller = (callingUid == Process.SYSTEM_UID);
+                privilegedCaller = isPrivileged(callingUid);
             }
             Log.d(TAG, "setReaderMode: uid=" + callingUid + ", packageName: "
                     + packageName + ", flags: " + flags);
