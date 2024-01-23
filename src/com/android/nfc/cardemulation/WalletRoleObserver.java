@@ -19,6 +19,7 @@ package com.android.nfc.cardemulation;
 import android.app.role.OnRoleHoldersChangedListener;
 import android.app.role.RoleManager;
 import android.content.Context;
+import android.os.Binder;
 import android.os.UserHandle;
 import android.text.TextUtils;
 
@@ -53,15 +54,20 @@ public class WalletRoleObserver {
     }
 
     public String getDefaultWalletRoleHolder(int userId) {
-        if(!mRoleManager.isRoleAvailable(RoleManager.ROLE_WALLET)) {
-            return null;
+        final long token = Binder.clearCallingIdentity();
+        try {
+            if (!mRoleManager.isRoleAvailable(RoleManager.ROLE_WALLET)) {
+                return null;
+            }
+            List<String> roleHolders = mRoleManager.getRoleHoldersAsUser(RoleManager.ROLE_WALLET,
+                    UserHandle.of(userId));
+            if (roleHolders.isEmpty()) {
+                return null;
+            }
+            return roleHolders.get(0);
+        } finally {
+            Binder.restoreCallingIdentity(token);
         }
-        List<String> roleHolders = mRoleManager.getRoleHoldersAsUser(RoleManager.ROLE_WALLET,
-                UserHandle.of(userId));
-        if(roleHolders.isEmpty()) {
-            return null;
-        }
-        return roleHolders.get(0);
     }
 
     public void onUserSwitched(int userId) {
