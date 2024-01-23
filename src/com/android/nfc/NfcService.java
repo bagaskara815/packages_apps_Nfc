@@ -16,6 +16,7 @@
 
 package com.android.nfc;
 
+import android.annotation.NonNull;
 import android.app.ActivityManager;
 import android.app.Application;
 import android.app.BroadcastOptions;
@@ -65,7 +66,7 @@ import android.nfc.NfcAntennaInfo;
 import android.nfc.Tag;
 import android.nfc.TechListParcel;
 import android.nfc.TransceiveResult;
-import android.nfc.WlcLDeviceInfo;
+import android.nfc.WlcListenerDeviceInfo;
 import android.nfc.tech.Ndef;
 import android.nfc.tech.TagTechnology;
 import android.os.AsyncTask;
@@ -75,6 +76,7 @@ import android.os.Bundle;
 import android.os.Handler;
 import android.os.IBinder;
 import android.os.Message;
+import android.os.ParcelFileDescriptor;
 import android.os.PowerManager;
 import android.os.PowerManager.OnThermalStatusChangedListener;
 import android.os.Process;
@@ -244,6 +246,8 @@ public class NfcService implements DeviceHostListener, ForegroundUtils.Callback 
 
     public static boolean sIsShortRecordLayout = false;
 
+    public static boolean sIsNfcRestore = false;
+
     // for use with playSound()
     public static final int SOUND_START = 0;
     public static final int SOUND_END = 1;
@@ -364,7 +368,7 @@ public class NfcService implements DeviceHostListener, ForegroundUtils.Callback 
     boolean mIsWlcCapable;
     boolean mIsWlcEnabled;
     boolean mIsRWCapable;
-    WlcLDeviceInfo mWlcLDeviceInfo;
+    WlcListenerDeviceInfo mWlcListenerDeviceInfo;
 
     // polling delay control variables
     private final int mPollDelayTime;
@@ -519,14 +523,14 @@ public class NfcService implements DeviceHostListener, ForegroundUtils.Callback 
             Log.d(TAG, " onWlcData  " + key + " =  " + WlcDeviceInfo.get(key));
         }
         synchronized (mWlcStateListener) {
-            mWlcLDeviceInfo = new WlcLDeviceInfo(
+            mWlcListenerDeviceInfo = new WlcListenerDeviceInfo(
                     WlcDeviceInfo.get(mNfcCharging.VendorId),
                     WlcDeviceInfo.get(mNfcCharging.TemperatureListener),
                     WlcDeviceInfo.get(mNfcCharging.BatteryLevel),
                     WlcDeviceInfo.get(mNfcCharging.State));
             for (INfcWlcStateListener listener : mWlcStateListener) {
                 try {
-                    listener.onWlcStateChanged(mWlcLDeviceInfo);
+                    listener.onWlcStateChanged(mWlcListenerDeviceInfo);
                 } catch (RemoteException e) {
                     Log.e(TAG, "error in onWlcData");
                 }
@@ -1073,6 +1077,12 @@ public class NfcService implements DeviceHostListener, ForegroundUtils.Callback 
             switch (params[0].intValue()) {
                 case TASK_ENABLE:
                     enableInternal();
+                    if (sIsNfcRestore && mIsTagAppPrefSupported) {
+                        synchronized (NfcService.this) {
+                            initTagAppPrefList();
+                            sIsNfcRestore = false;
+                        }
+                    }
                     break;
                 case TASK_DISABLE:
                     disableInternal();
@@ -1943,13 +1953,13 @@ public class NfcService implements DeviceHostListener, ForegroundUtils.Callback 
         }
 
         @Override
-        public boolean enableWlc(boolean enable) {
+        public boolean setWlcEnabled(boolean enable) {
             if (!mIsWlcCapable) {
                 return false;
             }
             NfcPermissions.enforceAdminPermissions(mContext);
             // enable or disable WLC
-            if (DBG) Log.d(TAG, "enableWlc: " + enable);
+            if (DBG) Log.d(TAG, "setWlcEnabled: " + enable);
             synchronized (NfcService.this) {
                 // check whether NFC is enabled
                 if (!isNfcEnabled()) {
@@ -1975,12 +1985,12 @@ public class NfcService implements DeviceHostListener, ForegroundUtils.Callback 
         }
 
         @Override
-        public WlcLDeviceInfo getWlcLDeviceInfo() {
+        public WlcListenerDeviceInfo getWlcListenerDeviceInfo() {
             if (!mIsWlcCapable) {
                 return null;
             }
             synchronized (NfcService.this) {
-                return mWlcLDeviceInfo;
+                return mWlcListenerDeviceInfo;
             }
         }
 
@@ -2193,6 +2203,17 @@ public class NfcService implements DeviceHostListener, ForegroundUtils.Callback 
                 Log.e(TAG, "error when notifying HCE deactivated", ex);
             }
         }
+
+        @Override
+        public int handleShellCommand(@NonNull ParcelFileDescriptor in,
+                @NonNull ParcelFileDescriptor out, @NonNull ParcelFileDescriptor err,
+                @NonNull String[] args) {
+
+            NfcShellCommand shellCommand = new NfcShellCommand(NfcService.this, mContext);
+            return shellCommand.exec(this, in.getFileDescriptor(), out.getFileDescriptor(),
+                    err.getFileDescriptor(), args);
+        }
+
     }
 
     final class SeServiceDeathRecipient implements IBinder.DeathRecipient {

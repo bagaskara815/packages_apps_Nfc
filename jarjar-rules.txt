@@ -45,3 +45,6 @@ rule android.nfc.FeatureFlags* com.android.nfc.x.@0
 rule android.nfc.Flags* com.android.nfc.x.@0
 rule android.permission.flags.** com.android.nfc.x.@0
 rule android.service.chooser.Flags.** com.android.nfc.x.@0
+
+# Core utils available for modules
+rule com.android.modules.utils.** com.android.nfc.x.@0
