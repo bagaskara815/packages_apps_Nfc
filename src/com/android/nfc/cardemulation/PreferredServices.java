@@ -28,6 +28,8 @@ import android.os.Handler;
 import android.os.Looper;
 import android.os.UserHandle;
 import android.os.UserManager;
+import android.permission.flags.Flags;
+
 import android.provider.Settings;
 import android.provider.Settings.SettingNotFoundException;
 import android.sysprop.NfcProperties;
@@ -179,8 +181,8 @@ public class PreferredServices implements com.android.nfc.ForegroundUtils.Callba
         boolean preferForeground = false;
         try {
             // get the setting from the main user instead of from the user profiles.
-            preferForeground = Settings.Secure.getInt(mContext
-                    .createContextAsUser(currentUser, 0).getContentResolver(),
+            preferForeground = Flags.walletRoleEnabled() || Settings.Secure.getInt(mContext
+                            .createContextAsUser(currentUser, 0).getContentResolver(),
                     Constants.SETTINGS_SECURE_NFC_PAYMENT_FOREGROUND) != 0;
         } catch (SettingNotFoundException e) {
         }
