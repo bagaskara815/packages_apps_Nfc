@@ -41,6 +41,7 @@ import android.os.RemoteException;
 import android.os.SystemClock;
 import android.os.UserHandle;
 import android.os.UserManager;
+import android.permission.flags.Flags;
 import android.provider.Settings;
 import android.sysprop.NfcProperties;
 import android.util.Log;
@@ -537,6 +538,10 @@ public class CardEmulationManager implements RegisteredServicesCache.Callback,
             if (!isServiceRegistered(userId, service)) {
                 return false;
             }
+            if (Flags.walletRoleEnabled()) {
+                return service.getPackageName()
+                        .equals(mWalletRoleObserver.getDefaultWalletRoleHolder(userId));
+            }
             ComponentName defaultService =
                     getDefaultServiceForCategory(userId, category, true);
             return (defaultService != null && defaultService.equals(service));
@@ -732,6 +737,10 @@ public class CardEmulationManager implements RegisteredServicesCache.Callback,
 
         @Override
         public boolean isDefaultPaymentRegistered() throws RemoteException {
+            if (Flags.walletRoleEnabled()) {
+                return mWalletRoleObserver
+                        .getDefaultWalletRoleHolder(Binder.getCallingUid()) != null;
+            }
             String defaultComponent = Settings.Secure.getString(mContext.getContentResolver(),
                     Constants.SETTINGS_SECURE_NFC_PAYMENT_DEFAULT_COMPONENT);
             return defaultComponent != null ? true : false;
@@ -972,6 +981,7 @@ public class CardEmulationManager implements RegisteredServicesCache.Callback,
 
     @Override
     public void onWalletRoleHolderChanged(String holder, int userId) {
+        mPreferredServices.onWalletRoleHolderChanged(holder, userId);
         mAidCache.onWalletRoleHolderChanged(holder, userId);
     }
 
