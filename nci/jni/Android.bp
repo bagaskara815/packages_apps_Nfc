@@ -31,7 +31,6 @@ cc_library_shared {
         "libcutils",
         "libutils",
         "liblog",
-        "libchrome",
         "libbase",
         // Treble configuration
         "libhidlbase",
