@@ -38,6 +38,8 @@ import java.io.PrintWriter;
  * enforce the corresponding API permissions.
  */
 public class NfcShellCommand extends BasicShellCommandHandler {
+    private static final int DISABLE_POLLING_FLAGS = 0x1000;
+    private static final int ENABLE_POLLING_FLAGS = 0x0000;
 
     // These don't require root access. However, these do perform permission checks in the
     // corresponding binder methods in mNfcService.mNfcAdapter.
@@ -93,6 +95,16 @@ public class NfcShellCommand extends BasicShellCommandHandler {
                 case "enable-nfc":
                     mNfcService.mNfcAdapter.enable();
                     return 0;
+                case "set-reader-mode":
+                    boolean enable_polling =
+                            getNextArgRequiredTrueOrFalse("enable-polling", "disable-polling");
+                    int flags = enable_polling ? ENABLE_POLLING_FLAGS : DISABLE_POLLING_FLAGS;
+                    mNfcService.mNfcAdapter.setReaderMode(new Binder(), null, flags, null);
+                    return 0;
+                case "set-observe-mode":
+                    boolean enable = getNextArgRequiredTrueOrFalse("enable", "disable");
+                    mNfcService.mNfcAdapter.setObserveMode(enable);
+                    return 0;
                 default:
                     return handleDefaultCommands(cmd);
             }
@@ -139,6 +151,10 @@ public class NfcShellCommand extends BasicShellCommandHandler {
     }
 
     private void onHelpPrivileged(PrintWriter pw) {
+        pw.println("  set-observe-mode enable|disable");
+        pw.println("    Enable or disable observe mode.");
+        pw.println("  set-reader-mode enable-polling|disable-polling");
+        pw.println("    Enable or reader mode polling");
     }
 
     @Override

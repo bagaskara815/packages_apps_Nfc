@@ -15,6 +15,8 @@
  */
 package com.android.nfc.cardemulation;
 
+import static com.android.nfc.cardemulation.HostEmulationManager.STATE_W4_SELECT;
+
 import static org.junit.Assert.assertNotNull;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
@@ -108,7 +110,7 @@ public final class NfcCardEmulationOccurredTest {
         when(NfcService.getInstance()).thenReturn(mock(NfcService.class));
 
         InstrumentationRegistry.getInstrumentation().runOnMainSync(
-              () -> mHostEmulation = new HostEmulationManager(mockContext, mockAidCache));
+                () -> mHostEmulation = new HostEmulationManager(mockContext, mockAidCache));
         assertNotNull(mHostEmulation);
 
         mHostEmulation.onHostEmulationActivated();
@@ -126,11 +128,11 @@ public final class NfcCardEmulationOccurredTest {
         if (!mNfcSupported) return;
 
         byte[] aidBytes = new byte[] {
-            0x00, (byte)0xA4, 0x04, 0x00,  // command
-            0x08,  // data length
-            (byte)0xA0, 0x00, 0x00, 0x00, 0x03, 0x00, 0x00,
-            0x00,  // card manager AID
-            0x00  // trailer
+                0x00, (byte)0xA4, 0x04, 0x00,  // command
+                0x08,  // data length
+                (byte)0xA0, 0x00, 0x00, 0x00, 0x03, 0x00, 0x00,
+                0x00,  // card manager AID
+                0x00  // trailer
         };
         mHostEmulation.onHostEmulationData(aidBytes);
         ExtendedMockito.verify(() -> NfcStatsLog.write(
@@ -138,5 +140,14 @@ public final class NfcCardEmulationOccurredTest {
                 NfcStatsLog.NFC_CARDEMULATION_OCCURRED__CATEGORY__HCE_OTHER,
                 "HCE",
                 UID_1));
+    }
+
+    @Test
+    public void testOnHostEmulationActivated() {
+        if (!mNfcSupported) return;
+
+        mHostEmulation.onHostEmulationActivated();
+        int value = mHostEmulation.getState();
+        Assert.assertEquals(value, STATE_W4_SELECT);
     }
 }
