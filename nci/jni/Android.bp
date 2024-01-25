@@ -48,10 +48,11 @@ cc_library_shared {
         "android.hardware.nfc-V1-ndk",
         "libnfcutils",
         "libnfc-nci",
+        "libnfc-nci_flags",
         "libstatslog_nfc",
         "android_nfc_flags_aconfig_c_lib",
         "server_configurable_flags",
-        "libxml2"
+        "libxml2",
     ],
 
     product_variables: {
