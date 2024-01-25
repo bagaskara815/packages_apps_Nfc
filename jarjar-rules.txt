@@ -39,12 +39,5 @@ rule com.android.nfc.DiscoveryParamsProto* com.android.nfc.x.@0
 rule com.android.nfc.NfcDispatcherProto* com.android.nfc.x.@0
 rule android.os.PersistableBundleProto* com.android.nfc.x.@0
 
-# Used for reading trunk stable flags
-rule android.nfc.FakeFeatureFlagsImpl* com.android.nfc.x.@0
-rule android.nfc.FeatureFlags* com.android.nfc.x.@0
-rule android.nfc.Flags* com.android.nfc.x.@0
-rule android.permission.flags.** com.android.nfc.x.@0
-rule android.service.chooser.Flags.** com.android.nfc.x.@0
-
 # Core utils available for modules
 rule com.android.modules.utils.** com.android.nfc.x.@0
