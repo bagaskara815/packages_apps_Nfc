@@ -445,13 +445,16 @@ public class NativeNfcManager implements DeviceHost {
                     frame.putChar(
                             HostApduService.POLLING_LOOP_TYPE_KEY,
                             HostApduService.POLLING_LOOP_TYPE_UNKNOWN);
-                    frame.putByteArray(
-                            HostApduService.POLLING_LOOP_DATA_KEY,
-                            Arrays.copyOfRange(
-                                    p_data, pos + TLV_data_offset, pos + TLV_header_len + length));
                     break;
                 default:
                     Log.e(TAG, "Unknown polling loop tag type.");
+            }
+            if (pos + TLV_header_len + length <= data_len) {
+                frame.putByteArray(
+                        HostApduService.POLLING_LOOP_DATA_KEY,
+                        Arrays.copyOfRange(
+                                p_data, pos + TLV_data_offset,
+                                pos + TLV_header_len + length));
             }
             if (pos + TLV_gain_offset <= data_len) {
                 byte gain = p_data[pos + TLV_gain_offset];
