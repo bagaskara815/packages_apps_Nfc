@@ -27,6 +27,7 @@ import android.content.ServiceConnection;
 import android.content.pm.ApplicationInfo;
 import android.content.pm.PackageManager;
 import android.content.pm.PackageManager.NameNotFoundException;
+import android.nfc.NfcAdapter;
 import android.nfc.cardemulation.ApduServiceInfo;
 import android.nfc.cardemulation.CardEmulation;
 import android.nfc.cardemulation.HostApduService;
@@ -118,6 +119,8 @@ public class HostEmulationManager {
     // latency.
     Messenger mPaymentService;
     boolean mPaymentServiceBound = false;
+
+    boolean mEnableObserveModeAfterTransaction = false;
     ComponentName mPaymentServiceName = null;
     int mPaymentServiceUserId; // The userId of the payment service
     ComponentName mLastBoundPaymentServiceName;
@@ -222,6 +225,9 @@ public class HostEmulationManager {
                             serviceInfo = serviceInfos.get(0);
                         }
                     }
+                    if (serviceInfo.getShouldAutoTransact(dataStr)) {
+                        allowOneTransaction();
+                    }
                     UserHandle user = UserHandle.getUserHandleForUid(serviceInfo.getUid());
                     service = bindServiceIfNeededLocked(user.getIdentifier(),
                             serviceInfo.getComponent());
@@ -266,6 +272,13 @@ public class HostEmulationManager {
                 mPendingPollingLoopFrames = null;
             }
         }
+    }
+
+    private void allowOneTransaction() {
+        Log.d(TAG, "disabling observe mode for one transaction.");
+        mEnableObserveModeAfterTransaction = true;
+        NfcAdapter adapter = NfcAdapter.getDefaultAdapter(mContext);
+        adapter.setTransactionAllowed(true);
     }
 
     /**
@@ -473,6 +486,13 @@ public class HostEmulationManager {
             mPendingPollingLoopFrames = null;
             unbindServiceIfNeededLocked();
             mState = STATE_IDLE;
+
+            if (mEnableObserveModeAfterTransaction) {
+                Log.d(TAG, "re-enabling observe mode after HCE deactivation");
+                mEnableObserveModeAfterTransaction = false;
+                NfcAdapter adapter = NfcAdapter.getDefaultAdapter(mContext);
+                adapter.setTransactionAllowed(false);
+            }
 
             if (mStatsdUtils != null) {
                 mStatsdUtils.logCardEmulationDeactivatedEvent();
