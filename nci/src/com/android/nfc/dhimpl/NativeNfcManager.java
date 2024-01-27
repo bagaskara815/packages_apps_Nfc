@@ -164,6 +164,9 @@ public class NativeNfcManager implements DeviceHost {
     public native boolean setObserveMode(boolean enabled);
 
     @Override
+    public native boolean isObserveModeEnabled();
+
+    @Override
     public void registerT3tIdentifier(byte[] t3tIdentifier) {
         synchronized (mLock) {
             int handle = doRegisterT3tIdentifier(t3tIdentifier);
