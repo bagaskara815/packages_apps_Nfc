@@ -757,4 +757,17 @@ public class HostEmulationManager {
     public int getState(){
         return mState;
     }
+
+    @VisibleForTesting
+    public ServiceConnection getServiceConnection(){
+        return mConnection;
+    }
+
+    @VisibleForTesting
+    public IBinder getMessenger(){
+        if (mActiveService != null) {
+            return mActiveService.getBinder();
+        }
+        return null;
+    }
 }
