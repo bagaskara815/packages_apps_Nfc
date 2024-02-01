@@ -971,12 +971,10 @@ public class CardEmulationManager implements RegisteredServicesCache.Callback,
         if (adapter == null) {
             return;
         }
-        if (mServiceCache.doesServiceDefaultToObserveMode(userId,
-            service != null ? service : paymentService)) {
-            adapter.disallowTransaction();
-        } else {
-            adapter.allowTransaction();
-        }
+        boolean allowTransaction = !(mServiceCache.doesServiceDefaultToObserveMode(userId,
+                service != null ? service : paymentService));
+        adapter.setTransactionAllowed(allowTransaction);
+
     }
 
     @Override
