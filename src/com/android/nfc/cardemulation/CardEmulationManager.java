@@ -28,7 +28,6 @@ import android.nfc.Constants;
 import android.nfc.INfcCardEmulation;
 import android.nfc.INfcFCardEmulation;
 import android.nfc.NfcAdapter;
-import android.nfc.NfcManager;
 import android.nfc.cardemulation.AidGroup;
 import android.nfc.cardemulation.ApduServiceInfo;
 import android.nfc.cardemulation.CardEmulation;
@@ -735,11 +734,21 @@ public class CardEmulationManager implements RegisteredServicesCache.Callback,
             return mServiceCache.registerOtherForService(userId, app, status);
         }
 
+        private boolean isWalletRoleFeatureEnabled() {
+            final long token = Binder.clearCallingIdentity();
+            try {
+                return Flags.walletRoleEnabled();
+            } finally {
+                Binder.restoreCallingIdentity(token);
+            }
+        }
+
         @Override
         public boolean isDefaultPaymentRegistered() throws RemoteException {
-            if (Flags.walletRoleEnabled()) {
+            if (isWalletRoleFeatureEnabled()) {
+                int callingUserId = Binder.getCallingUserHandle().getIdentifier();
                 return mWalletRoleObserver
-                        .getDefaultWalletRoleHolder(Binder.getCallingUid()) != null;
+                        .getDefaultWalletRoleHolder(callingUserId) != null;
             }
             String defaultComponent = Settings.Secure.getString(mContext.getContentResolver(),
                     Constants.SETTINGS_SECURE_NFC_PAYMENT_DEFAULT_COMPONENT);
