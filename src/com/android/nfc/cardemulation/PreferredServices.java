@@ -44,6 +44,7 @@ import java.io.FileDescriptor;
 import java.io.PrintWriter;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 
 /**
  * This class keeps track of what HCE/SE-based services are
@@ -180,12 +181,9 @@ public class PreferredServices implements com.android.nfc.ForegroundUtils.Callba
         mUserIdDefaultWalletHolder = userId;
         ComponentName candidate = !roleHolderPaymentServices.isEmpty()
                 ? roleHolderPaymentServices.get(0) : null;
-        if (candidate != null) {
-            if (mDefaultWalletHolderPaymentService != null
-                    && !mDefaultWalletHolderPaymentService.equals(candidate)) {
-                mCallback.onPreferredPaymentServiceChanged(userId, candidate);
-            }
+        if (!Objects.equals(candidate, mDefaultWalletHolderPaymentService)) {
             mDefaultWalletHolderPaymentService = candidate;
+            mCallback.onPreferredPaymentServiceChanged(userId, mDefaultWalletHolderPaymentService);
         }
     }
 
