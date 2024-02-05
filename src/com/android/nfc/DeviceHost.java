@@ -211,6 +211,8 @@ public interface DeviceHost {
 
     public boolean setObserveMode(boolean enable);
 
+    public boolean isObserveModeEnabled();
+
     /**
     * Get the committed listen mode routing configuration
     */
