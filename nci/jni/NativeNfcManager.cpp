@@ -1063,7 +1063,7 @@ static jboolean nfcManager_isObserveModeEnabled(JNIEnv* e, jobject) {
                    NCI_QUERY_ANDROID_PASSIVE_OBSERVER_PARAM_SIZE,
                    NCI_QUERY_ANDROID_PASSIVE_OBSERVER};
 
-  tNFA_STATUS status = NFA_SendRawVsCommand(sizeof(cmd), cmd, NULL);
+  tNFA_STATUS status = NFA_SendRawVsCommand(sizeof(cmd), cmd, nfaVSCallback);
 
   if (status == NFA_STATUS_OK) {
     gNfaVsCommand.wait();
@@ -1108,7 +1108,7 @@ static jboolean nfcManager_setObserveMode(JNIEnv* e, jobject, jboolean enable) {
                                ? NCI_ANDROID_PASSIVE_OBSERVER_PARAM_ENABLE
                                : NCI_ANDROID_PASSIVE_OBSERVER_PARAM_DISABLE)};
 
-  tNFA_STATUS status = NFA_SendRawVsCommand(sizeof(cmd), cmd, NULL);
+  tNFA_STATUS status = NFA_SendRawVsCommand(sizeof(cmd), cmd, nfaVSCallback);
 
   if (status == NFA_STATUS_OK) {
     gNfaVsCommand.wait();
