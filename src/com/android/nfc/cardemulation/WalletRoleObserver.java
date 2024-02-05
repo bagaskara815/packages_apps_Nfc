@@ -21,6 +21,7 @@ import android.app.role.RoleManager;
 import android.content.Context;
 import android.os.Binder;
 import android.os.UserHandle;
+import android.permission.flags.Flags;
 import android.text.TextUtils;
 
 import java.util.List;
@@ -65,6 +66,15 @@ public class WalletRoleObserver {
                 return null;
             }
             return roleHolders.get(0);
+        } finally {
+            Binder.restoreCallingIdentity(token);
+        }
+    }
+
+     boolean isWalletRoleFeatureEnabled() {
+        final long token = Binder.clearCallingIdentity();
+        try {
+            return Flags.walletRoleEnabled();
         } finally {
             Binder.restoreCallingIdentity(token);
         }
