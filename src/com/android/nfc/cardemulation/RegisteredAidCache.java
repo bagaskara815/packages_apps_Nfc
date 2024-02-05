@@ -26,7 +26,6 @@ import android.nfc.cardemulation.CardEmulation;
 import android.nfc.cardemulation.Utils;
 import android.os.UserHandle;
 import android.os.UserManager;
-import android.permission.flags.Flags;
 import android.sysprop.NfcProperties;
 import android.util.Log;
 import android.util.proto.ProtoOutputStream;
@@ -142,6 +141,8 @@ public class RegisteredAidCache {
     final AidResolveInfo EMPTY_RESOLVE_INFO = new AidResolveInfo();
 
     final Context mContext;
+
+    final WalletRoleObserver mWalletRoleObserver;
     final AidRoutingManager mRoutingManager;
 
     final Object mLock = new Object();
@@ -160,8 +161,9 @@ public class RegisteredAidCache {
     boolean mSupportsSubset = false;
     boolean mRequiresScreenOnServiceExist = false;
 
-    public RegisteredAidCache(Context context) {
+    public RegisteredAidCache(Context context, WalletRoleObserver walletRoleObserver) {
         mContext = context;
+        mWalletRoleObserver = walletRoleObserver;
         mRoutingManager = new AidRoutingManager();
         mPreferredPaymentService = null;
         mUserIdPreferredPaymentService = -1;
@@ -276,10 +278,12 @@ public class RegisteredAidCache {
             if (componentName.equals(mPreferredForegroundService) &&
                     userId == mUserIdPreferredForegroundService) {
                 matchedForeground = serviceInfo;
-            } else if(Flags.walletRoleEnabled() && userId == mUserIdDefaultWalletHolder &&
+            } else if(mWalletRoleObserver.isWalletRoleFeatureEnabled()) {
+                if (userId == mUserIdDefaultWalletHolder &&
                     serviceInfo.getComponent()
                             .getPackageName().equals(mDefaultWalletHolderPackageName)) {
-                matchedRoleHolder = serviceInfo;
+                    matchedRoleHolder = serviceInfo;
+                }
             } else if (componentName.equals(mPreferredPaymentService) &&
                     userId == mUserIdPreferredPaymentService) {
                 matchedPayment = serviceInfo;
@@ -288,7 +292,7 @@ public class RegisteredAidCache {
         if (matchedForeground != null) {
             return matchedForeground;
         }
-        if (Flags.walletRoleEnabled()) {
+        if (mWalletRoleObserver.isWalletRoleFeatureEnabled()) {
             return matchedRoleHolder;
         }
         return matchedPayment;
@@ -335,7 +339,7 @@ public class RegisteredAidCache {
                     resolveInfo.category = CardEmulation.CATEGORY_PAYMENT;
                 }
                 matchedForeground = serviceAidInfo.service;
-            } else if(Flags.walletRoleEnabled()) {
+            } else if(mWalletRoleObserver.isWalletRoleFeatureEnabled()) {
                 if (DBG) Log.d(TAG, "Prioritizing default wallet services.");
                 if(userId == mUserIdDefaultWalletHolder &&
                         serviceAidInfo.service.getComponent()
@@ -373,31 +377,33 @@ public class RegisteredAidCache {
             if (DBG) Log.d(TAG, "resolveAidLocked: DECISION: routing to foreground preferred " +
                     matchedForeground);
             resolveInfo.defaultService = matchedForeground;
-        } else if (Flags.walletRoleEnabled() && !defaultWalletServices.isEmpty()) {
-            // 2nd priority: if there is a default wallet application with services that
-            // claim this AID, that application gets it.
-            if (DBG) Log.d(TAG, "resolveAidLocked: DECISION: routing to default wallet " +
-                    mDefaultWalletHolderPackageName);
-            if (defaultWalletServices.size() == 1 && makeSingleServiceDefault) {
-                if (DBG) Log.d(TAG,
-                        "resolveAidLocked: DECISION: making single handling service " +
-                                defaultWalletServices.get(0).getComponent() + " default.");
-                resolveInfo.defaultService = defaultWalletServices.get(0);
-            }
-        } else if (matchedPayment != null) {
-            // 3d priority: if there is a preferred payment service,
-            // and that service claims this as a payment AID, that service gets it
-            if (DBG) Log.d(TAG, "resolveAidLocked: DECISION: routing to payment default " +
-                    "default " + matchedPayment);
-            resolveInfo.defaultService = matchedPayment;
-        } else {
-            if (resolveInfo.services.size() == 1 && makeSingleServiceDefault) {
-                if (DBG) Log.d(TAG, "resolveAidLocked: DECISION: making single handling service " +
-                        resolveInfo.services.get(0).getComponent() + " default.");
-                resolveInfo.defaultService = resolveInfo.services.get(0);
+        } else if (mWalletRoleObserver.isWalletRoleFeatureEnabled()) {
+            if(!defaultWalletServices.isEmpty()) {
+                // 2nd priority: if there is a default wallet application with services that
+                // claim this AID, that application gets it.
+                if (DBG) Log.d(TAG, "resolveAidLocked: DECISION: routing to default wallet " +
+                        mDefaultWalletHolderPackageName);
+                if (defaultWalletServices.size() == 1 && makeSingleServiceDefault) {
+                    if (DBG) Log.d(TAG,
+                            "resolveAidLocked: DECISION: making single handling service " +
+                                    defaultWalletServices.get(0).getComponent() + " default.");
+                    resolveInfo.defaultService = defaultWalletServices.get(0);
+                }
+            } else if (matchedPayment != null) {
+                // 3d priority: if there is a preferred payment service,
+                // and that service claims this as a payment AID, that service gets it
+                if (DBG) Log.d(TAG, "resolveAidLocked: DECISION: routing to payment default " +
+                        "default " + matchedPayment);
+                resolveInfo.defaultService = matchedPayment;
             } else {
-                // Nothing to do, all services already in list
-                if (DBG) Log.d(TAG, "resolveAidLocked: DECISION: routing to all matching services");
+                if (resolveInfo.services.size() == 1 && makeSingleServiceDefault) {
+                    if (DBG) Log.d(TAG, "resolveAidLocked: DECISION: making single handling service " +
+                            resolveInfo.services.get(0).getComponent() + " default.");
+                    resolveInfo.defaultService = resolveInfo.services.get(0);
+                } else {
+                    // Nothing to do, all services already in list
+                    if (DBG) Log.d(TAG, "resolveAidLocked: DECISION: routing to all matching services");
+                }
             }
         }
         return resolveInfo;
@@ -422,10 +428,12 @@ public class RegisteredAidCache {
             if (componentName.equals(mPreferredForegroundService) &&
                     userId == mUserIdPreferredForegroundService) {
                 defaultServiceInfo.foregroundDefault = serviceAidInfo;
-            } else if(Flags.walletRoleEnabled() && userId == mUserIdDefaultWalletHolder &&
+            } else if(mWalletRoleObserver.isWalletRoleFeatureEnabled()) {
+                if(userId == mUserIdDefaultWalletHolder &&
                     serviceAidInfo.service.getComponent()
                             .getPackageName().equals(mDefaultWalletHolderPackageName)) {
-                defaultServiceInfo.walletDefaults.add(serviceAidInfo);
+                    defaultServiceInfo.walletDefaults.add(serviceAidInfo);
+                }
             }else if (componentName.equals(mPreferredPaymentService) &&
                     userId == mUserIdPreferredPaymentService &&
                     serviceClaimsPaymentAid) {
@@ -461,24 +469,28 @@ public class RegisteredAidCache {
                         List.of(resolveinfo.defaultService), true);
             }
              return resolveinfo;
-        } else if (Flags.walletRoleEnabled() && !aidDefaultInfo.walletDefaults.isEmpty()) {
-            // Check if any of the conflicting services is foreground default
-            if (conflictingDefaultInfo.foregroundDefault != null) {
-                // Conflicting AID registration is in foreground, trumps prefix tap&pay default
-                if (DBG) Log.d(TAG, "One of the conflicting AID registrations is foreground " +
-                        "preferred, ignoring prefix.");
-                return EMPTY_RESOLVE_INFO;
-            } else {
-                // Prefix service is default wallet, treat as normal AID conflict for just prefix
-                if (DBG) Log.d(TAG, "Default wallet app exists. ignoring conflicting AIDs.");
-                resolveinfo = resolveAidConflictLocked(aidServices, true);
-                //If the AID is subsetAID check for prefix in all services.
-                if (isSubset(aidServices.get(0).aid)) {
-                    resolveinfo.prefixInfo = findPrefixConflictForSubsetAid(aidServices.get(0).aid,
-                            List.of(resolveinfo.defaultService), true);
+        } else if (mWalletRoleObserver.isWalletRoleFeatureEnabled()) {
+            if(!aidDefaultInfo.walletDefaults.isEmpty()) {
+                // Check if any of the conflicting services is foreground default
+                if (conflictingDefaultInfo.foregroundDefault != null) {
+                    // Conflicting AID registration is in foreground, trumps prefix tap&pay default
+                    if (DBG) Log.d(TAG, "One of the conflicting AID registrations is foreground " +
+                            "preferred, ignoring prefix.");
+                    return EMPTY_RESOLVE_INFO;
+                } else {
+                    // Prefix service is default wallet, treat as normal AID conflict for just prefix
+                    if (DBG) Log.d(TAG, "Default wallet app exists. ignoring conflicting AIDs.");
+                    resolveinfo = resolveAidConflictLocked(aidServices, true);
+                    //If the AID is subsetAID check for prefix in all services.
+                    if (isSubset(aidServices.get(0).aid)) {
+                        resolveinfo.prefixInfo = findPrefixConflictForSubsetAid(
+                                aidServices.get(0).aid,
+                                List.of(resolveinfo.defaultService), true);
+                    }
+                    return resolveinfo;
                 }
-                return resolveinfo;
             }
+            return EMPTY_RESOLVE_INFO;
         } else if (aidDefaultInfo.paymentDefault != null) {
             // Check if any of the conflicting services is foreground default
             if (conflictingDefaultInfo.foregroundDefault != null) {

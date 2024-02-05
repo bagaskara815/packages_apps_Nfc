@@ -40,7 +40,6 @@ import android.os.RemoteException;
 import android.os.SystemClock;
 import android.os.UserHandle;
 import android.os.UserManager;
-import android.permission.flags.Flags;
 import android.provider.Settings;
 import android.sysprop.NfcProperties;
 import android.util.Log;
@@ -126,13 +125,14 @@ public class CardEmulationManager implements RegisteredServicesCache.Callback,
             context.getSystemService(ActivityManager.class));
         mWalletRoleObserver = new WalletRoleObserver(context,
                 context.getSystemService(RoleManager.class), this);
-        mAidCache = new RegisteredAidCache(context);
+        mAidCache = new RegisteredAidCache(context, mWalletRoleObserver);
         mT3tIdentifiersCache = new RegisteredT3tIdentifiersCache(context);
         mHostEmulationManager = new HostEmulationManager(context, mAidCache);
         mHostNfcFEmulationManager = new HostNfcFEmulationManager(context, mT3tIdentifiersCache);
         mServiceCache = new RegisteredServicesCache(context, this);
         mNfcFServicesCache = new RegisteredNfcFServicesCache(context, this);
-        mPreferredServices = new PreferredServices(context, mServiceCache, mAidCache, this);
+        mPreferredServices = new PreferredServices(context, mServiceCache, mAidCache,
+                mWalletRoleObserver, this);
         mEnabledNfcFServices = new EnabledNfcFServices(
                 context, mNfcFServicesCache, mT3tIdentifiersCache, this);
         mServiceCache.initialize();
@@ -537,7 +537,7 @@ public class CardEmulationManager implements RegisteredServicesCache.Callback,
             if (!isServiceRegistered(userId, service)) {
                 return false;
             }
-            if (Flags.walletRoleEnabled()) {
+            if (mWalletRoleObserver.isWalletRoleFeatureEnabled()) {
                 return service.getPackageName()
                         .equals(mWalletRoleObserver.getDefaultWalletRoleHolder(userId));
             }
@@ -734,18 +734,9 @@ public class CardEmulationManager implements RegisteredServicesCache.Callback,
             return mServiceCache.registerOtherForService(userId, app, status);
         }
 
-        private boolean isWalletRoleFeatureEnabled() {
-            final long token = Binder.clearCallingIdentity();
-            try {
-                return Flags.walletRoleEnabled();
-            } finally {
-                Binder.restoreCallingIdentity(token);
-            }
-        }
-
         @Override
         public boolean isDefaultPaymentRegistered() throws RemoteException {
-            if (isWalletRoleFeatureEnabled()) {
+            if (mWalletRoleObserver.isWalletRoleFeatureEnabled()) {
                 int callingUserId = Binder.getCallingUserHandle().getIdentifier();
                 return mWalletRoleObserver
                         .getDefaultWalletRoleHolder(callingUserId) != null;
