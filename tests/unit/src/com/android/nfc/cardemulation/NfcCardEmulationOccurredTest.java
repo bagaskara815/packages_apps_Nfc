@@ -203,9 +203,9 @@ public final class NfcCardEmulationOccurredTest {
 
         Bundle pollingLoopTypeOnFrame = mock(Bundle.class);
         Bundle pollingLoopTypeOffFrame = mock(Bundle.class);
-        when(pollingLoopTypeOnFrame.getChar(HostApduService.POLLING_LOOP_TYPE_KEY))
+        when(pollingLoopTypeOnFrame.getChar(HostApduService.KEY_POLLING_LOOP_TYPE))
                 .thenReturn(HostApduService.POLLING_LOOP_TYPE_ON);
-        when(pollingLoopTypeOffFrame.getChar(HostApduService.POLLING_LOOP_TYPE_KEY))
+        when(pollingLoopTypeOffFrame.getChar(HostApduService.KEY_POLLING_LOOP_TYPE))
                 .thenReturn(HostApduService.POLLING_LOOP_TYPE_OFF);
         ComponentName componentName = mock(ComponentName.class);
         when(componentName.getPackageName()).thenReturn("com.android.nfc");
