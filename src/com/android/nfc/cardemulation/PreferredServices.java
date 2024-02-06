@@ -72,6 +72,7 @@ public class PreferredServices implements com.android.nfc.ForegroundUtils.Callba
 
     final SettingsObserver mSettingsObserver;
     final Context mContext;
+    final WalletRoleObserver mWalletRoleObserver;
     final RegisteredServicesCache mServiceCache;
     final RegisteredAidCache mAidCache;
     final Callback mCallback;
@@ -115,8 +116,10 @@ public class PreferredServices implements com.android.nfc.ForegroundUtils.Callba
     }
 
     public PreferredServices(Context context, RegisteredServicesCache serviceCache,
-            RegisteredAidCache aidCache, Callback callback) {
+            RegisteredAidCache aidCache, WalletRoleObserver walletRoleObserver,
+            Callback callback) {
         mContext = context;
+        mWalletRoleObserver = walletRoleObserver;
         mForegroundUtils = ForegroundUtils.getInstance(
                 context.getSystemService(ActivityManager.class));
         mServiceCache = serviceCache;
@@ -225,7 +228,8 @@ public class PreferredServices implements com.android.nfc.ForegroundUtils.Callba
         boolean preferForeground = false;
         try {
             // get the setting from the main user instead of from the user profiles.
-            preferForeground = Flags.walletRoleEnabled() || Settings.Secure.getInt(mContext
+            preferForeground = mWalletRoleObserver.isWalletRoleFeatureEnabled()
+                    || Settings.Secure.getInt(mContext
                             .createContextAsUser(currentUser, 0).getContentResolver(),
                     Constants.SETTINGS_SECURE_NFC_PAYMENT_FOREGROUND) != 0;
         } catch (SettingNotFoundException e) {
