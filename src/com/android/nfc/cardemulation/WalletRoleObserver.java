@@ -28,7 +28,6 @@ import java.util.List;
 
 public class WalletRoleObserver {
 
-    private static final String TAG = "WalletRoleObserver";
     public interface Callback {
         void onWalletRoleHolderChanged(String holder, int userId);
     }
@@ -62,10 +61,7 @@ public class WalletRoleObserver {
             }
             List<String> roleHolders = mRoleManager.getRoleHoldersAsUser(RoleManager.ROLE_WALLET,
                     UserHandle.of(userId));
-            if (roleHolders.isEmpty()) {
-                return null;
-            }
-            return roleHolders.get(0);
+            return roleHolders.isEmpty() ? null : roleHolders.get(0);
         } finally {
             Binder.restoreCallingIdentity(token);
         }
