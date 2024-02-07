@@ -113,12 +113,12 @@ void NativeWlcManager::initialize(nfc_jni_native_data* native) {
   mNativeData = native;
   mIsWlcEnabled = false;
 
+  SyncEventGuard g(sNfaWlcEnableEvent);
   // TODO: only do it once at NfcManager init if WLC allowed
   stat = NFA_WlcEnable(nfaWlcManagementCallback);
 
   if (stat == NFA_STATUS_OK) {
     // TODO: get enable result to stop directly if failed
-    SyncEventGuard g(sNfaWlcEnableEvent);
     sNfaWlcEnableEvent.wait();
     LOG(DEBUG) << StringPrintf("%s: enable Wlc module success", __func__);
   } else {
@@ -238,12 +238,12 @@ jboolean NativeWlcManager::com_android_nfc_wlc_startWlcP(JNIEnv* e, jobject,
   LOG(DEBUG) << StringPrintf("%s: enter", __func__);
 
   gMutexWlc.lock();
+  SyncEventGuard g(sNfaWlcEvent);
   stat = NFA_WlcStart(mode);
 
   if (stat == NFA_STATUS_OK) {
     LOG(DEBUG) << StringPrintf(
         "%s: start Wlc Poller, wait for success confirmation", __func__);
-    SyncEventGuard g(sNfaWlcEvent);
     sNfaWlcEvent.wait();
   } else {
     LOG(ERROR) << StringPrintf("%s: fail start WlcPoller; error=0x%X", __func__,
@@ -272,13 +272,13 @@ jboolean NativeWlcManager::com_android_nfc_wlc_chargeWlcListener(
   LOG(DEBUG) << StringPrintf("%s: wpt_time_int = %d", __func__, wpt_time_int);
 
   gMutexWlc.lock();
+  SyncEventGuard g(sNfaWlcEvent);
   // TODO: condition call to sIsWlcpStarted
   // TODO: limit the min of wpt_time_int
   stat = NFA_WlcStartWPT((uint16_t)(power_adj_req & 0xFFFF), wpt_time_int);
   if (stat == NFA_STATUS_OK) {
     LOG(DEBUG) << StringPrintf(
         "%s: charge Wlc Listener, wait for success confirmation", __func__);
-    SyncEventGuard g(sNfaWlcEvent);
     sNfaWlcEvent.wait();
   } else {
     LOG(ERROR) << StringPrintf("%s: fail charge Wlc Listener; error=0x%X",
