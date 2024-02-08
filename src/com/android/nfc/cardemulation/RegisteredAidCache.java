@@ -21,6 +21,7 @@ import android.annotation.FlaggedApi;
 import android.app.ActivityManager;
 import android.content.ComponentName;
 import android.content.Context;
+import android.content.pm.ResolveInfo;
 import android.nfc.cardemulation.ApduServiceInfo;
 import android.nfc.cardemulation.CardEmulation;
 import android.nfc.cardemulation.Utils;
@@ -298,6 +299,39 @@ public class RegisteredAidCache {
         return matchedPayment;
     }
 
+    private static void nonDefaultResolution(boolean serviceClaimsPaymentAid,
+            ServiceAidInfo serviceAidInfo, AidResolveInfo resolveInfo) {
+        if (serviceClaimsPaymentAid) {
+            // If this service claims it's a payment AID, don't route it,
+            // because it's not the default. Otherwise, add it to the list
+            // but not as default.
+            if (DBG) Log.d(TAG, "resolveAidLocked: (Ignoring handling service " +
+                    serviceAidInfo.service.getComponent() +
+                    " because it's not the payment default.)");
+        } else {
+            if (serviceAidInfo.service.isCategoryOtherServiceEnabled()) {
+                if (DBG) Log.d(TAG, serviceAidInfo.service.getComponent() +
+                        " is selected other service");
+                resolveInfo.services.add(serviceAidInfo.service);
+            }
+        }
+    }
+
+    private static void nonDefaultRouting(AidResolveInfo resolveInfo,
+            boolean makeSingleServiceDefault) {
+        if (resolveInfo.services.size() == 1 && makeSingleServiceDefault) {
+            if (DBG) Log.d(TAG,
+                    "resolveAidLocked: DECISION: making single handling service " +
+                            resolveInfo.services.get(0).getComponent() + " default.");
+            resolveInfo.defaultService = resolveInfo.services.get(0);
+        } else {
+            // Nothing to do, all services already in list
+            if (DBG) {
+                Log.d(TAG, "resolveAidLocked: DECISION: routing to all matching services");
+            }
+        }
+    }
+
     /**
      * Resolves a conflict between multiple services handling the same
      * AIDs. Note that the AID itself is not an input to the decision
@@ -346,6 +380,8 @@ public class RegisteredAidCache {
                                 .getPackageName().equals(mDefaultWalletHolderPackageName)) {
                     resolveInfo.services.add(serviceAidInfo.service);
                     defaultWalletServices.add(serviceAidInfo.service);
+                } else {
+                    nonDefaultResolution(serviceClaimsPaymentAid, serviceAidInfo, resolveInfo);
                 }
             } else if (componentName.equals(mPreferredPaymentService) &&
                     userId == mUserIdPreferredPaymentService &&
@@ -355,20 +391,7 @@ public class RegisteredAidCache {
                 resolveInfo.category = CardEmulation.CATEGORY_PAYMENT;
                 matchedPayment = serviceAidInfo.service;
             } else {
-                if (serviceClaimsPaymentAid) {
-                    // If this service claims it's a payment AID, don't route it,
-                    // because it's not the default. Otherwise, add it to the list
-                    // but not as default.
-                    if (DBG) Log.d(TAG, "resolveAidLocked: (Ignoring handling service " +
-                            serviceAidInfo.service.getComponent() +
-                            " because it's not the payment default.)");
-                } else {
-                    if (serviceAidInfo.service.isCategoryOtherServiceEnabled()) {
-                        if (DBG) Log.d(TAG, serviceAidInfo.service.getComponent() +
-                                " is selected other service");
-                        resolveInfo.services.add(serviceAidInfo.service);
-                    }
-                }
+                nonDefaultResolution(serviceClaimsPaymentAid, serviceAidInfo, resolveInfo);
             }
         }
         if (matchedForeground != null) {
@@ -389,22 +412,17 @@ public class RegisteredAidCache {
                                     defaultWalletServices.get(0).getComponent() + " default.");
                     resolveInfo.defaultService = defaultWalletServices.get(0);
                 }
-            } else if (matchedPayment != null) {
-                // 3d priority: if there is a preferred payment service,
-                // and that service claims this as a payment AID, that service gets it
-                if (DBG) Log.d(TAG, "resolveAidLocked: DECISION: routing to payment default " +
-                        "default " + matchedPayment);
-                resolveInfo.defaultService = matchedPayment;
             } else {
-                if (resolveInfo.services.size() == 1 && makeSingleServiceDefault) {
-                    if (DBG) Log.d(TAG, "resolveAidLocked: DECISION: making single handling service " +
-                            resolveInfo.services.get(0).getComponent() + " default.");
-                    resolveInfo.defaultService = resolveInfo.services.get(0);
-                } else {
-                    // Nothing to do, all services already in list
-                    if (DBG) Log.d(TAG, "resolveAidLocked: DECISION: routing to all matching services");
-                }
+                nonDefaultRouting(resolveInfo, makeSingleServiceDefault);
             }
+        } else if (matchedPayment != null) {
+            // 3d priority: if there is a preferred payment service,
+            // and that service claims this as a payment AID, that service gets it
+            if (DBG) Log.d(TAG, "resolveAidLocked: DECISION: routing to payment default " +
+                    "default " + matchedPayment);
+            resolveInfo.defaultService = matchedPayment;
+        } else {
+            nonDefaultRouting(resolveInfo, makeSingleServiceDefault);
         }
         return resolveInfo;
     }
@@ -441,6 +459,27 @@ public class RegisteredAidCache {
             }
         }
         return defaultServiceInfo;
+    }
+
+    private AidResolveInfo noChildrenAidsPreferred(ArrayList<ServiceAidInfo> aidServices,
+            ArrayList<ServiceAidInfo> conflictingServices) {
+        // No children that are preferred; add all services of the root
+        // make single service default if no children are present
+        if (DBG) Log.d(TAG, "No service has preference, adding all.");
+        AidResolveInfo resolveinfo =
+                resolveAidConflictLocked(aidServices, conflictingServices.isEmpty());
+        //If the AID is subsetAID check for conflicting prefix in all
+        //conflciting services and root services.
+        if (isSubset(aidServices.get(0).aid)) {
+            ArrayList<ApduServiceInfo> apduServiceList = new ArrayList<ApduServiceInfo>();
+            for (ServiceAidInfo serviceInfo : conflictingServices)
+                apduServiceList.add(serviceInfo.service);
+            for (ServiceAidInfo serviceInfo : aidServices)
+                apduServiceList.add(serviceInfo.service);
+            resolveinfo.prefixInfo = findPrefixConflictForSubsetAid(
+                    aidServices.get(0).aid, apduServiceList, false);
+        }
+        return resolveinfo;
     }
 
     AidResolveInfo resolveAidConflictLocked(ArrayList<ServiceAidInfo> aidServices,
@@ -489,8 +528,17 @@ public class RegisteredAidCache {
                     }
                     return resolveinfo;
                 }
+            } else {
+                if (aidDefaultInfo.foregroundDefault != null ) {
+                    if (DBG) Log.d(TAG,
+                            "One of the conflicting AID registrations is wallet holder " +
+                            "or foreground preferred, ignoring prefix.");
+                    return EMPTY_RESOLVE_INFO;
+                } else {
+                    return noChildrenAidsPreferred(aidServices, conflictingServices);
+                }
+
             }
-            return EMPTY_RESOLVE_INFO;
         } else if (aidDefaultInfo.paymentDefault != null) {
             // Check if any of the conflicting services is foreground default
             if (conflictingDefaultInfo.foregroundDefault != null) {
@@ -518,22 +566,7 @@ public class RegisteredAidCache {
                         "default or foreground preferred, ignoring prefix.");
                 return EMPTY_RESOLVE_INFO;
             } else {
-                // No children that are preferred; add all services of the root
-                // make single service default if no children are present
-                if (DBG) Log.d(TAG, "No service has preference, adding all.");
-                resolveinfo = resolveAidConflictLocked(aidServices, conflictingServices.isEmpty());
-                //If the AID is subsetAID check for conflicting prefix in all
-                //conflciting services and root services.
-                if (isSubset(aidServices.get(0).aid)) {
-                    ArrayList<ApduServiceInfo> apduServiceList = new ArrayList<ApduServiceInfo>();
-                    for (ServiceAidInfo serviceInfo : conflictingServices)
-                        apduServiceList.add(serviceInfo.service);
-                    for (ServiceAidInfo serviceInfo : aidServices)
-                        apduServiceList.add(serviceInfo.service);
-                    resolveinfo.prefixInfo = findPrefixConflictForSubsetAid(
-                            aidServices.get(0).aid, apduServiceList, false);
-                }
-                return resolveinfo;
+                return noChildrenAidsPreferred(aidServices, conflictingServices);
             }
         }
     }
