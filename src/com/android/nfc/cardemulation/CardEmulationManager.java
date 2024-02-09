@@ -942,37 +942,42 @@ public class CardEmulationManager implements RegisteredServicesCache.Callback,
 
     @Override
     public void onPreferredPaymentServiceChanged(int userId, ComponentName service) {
+        Log.i(TAG, "onPreferredPaymentServiceChanged");
         mAidCache.onPreferredPaymentServiceChanged(userId, service);
         mHostEmulationManager.onPreferredPaymentServiceChanged(userId, service);
 
         NfcService.getInstance().onPreferredPaymentChanged(
                 NfcAdapter.PREFERRED_PAYMENT_CHANGED);
+        updateForDefaultToObserveMode(userId);
     }
 
     @Override
     public void onPreferredForegroundServiceChanged(int userId, ComponentName service) {
+        Log.i(TAG, "onPreferredForegroundServiceChanged");
         mAidCache.onPreferredForegroundServiceChanged(userId, service);
         mHostEmulationManager.onPreferredForegroundServiceChanged(userId, service);
 
         NfcService.getInstance().onPreferredPaymentChanged(
                 NfcAdapter.PREFERRED_PAYMENT_CHANGED);
+        updateForDefaultToObserveMode(userId);
+    }
+    private void updateForDefaultToObserveMode(int userId) {
         long token = Binder.clearCallingIdentity();
         try {
             if (!android.nfc.Flags.nfcObserveMode()) {
+                Log.d(TAG, "observe mode isn't enabled");
                 return;
             }
         } finally {
             Binder.restoreCallingIdentity(token);
         }
-
-        ComponentName paymentService = getDefaultServiceForCategory(userId,
-                    CardEmulation.CATEGORY_PAYMENT, false);
         NfcAdapter adapter = NfcAdapter.getDefaultAdapter(mContext);
         if (adapter == null) {
+            Log.e(TAG, "adapter is null, returning");
             return;
         }
-        boolean allowTransaction = !(mServiceCache.doesServiceDefaultToObserveMode(userId,
-                service != null ? service : paymentService));
+        ComponentName preferredService = mAidCache.getPreferredService();
+        boolean allowTransaction = !mServiceCache.doesServiceDefaultToObserveMode(userId, preferredService);
         adapter.setTransactionAllowed(allowTransaction);
 
     }
