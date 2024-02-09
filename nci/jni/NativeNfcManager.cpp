@@ -1066,7 +1066,12 @@ static jboolean nfcManager_isObserveModeEnabled(JNIEnv* e, jobject) {
   tNFA_STATUS status = NFA_SendRawVsCommand(sizeof(cmd), cmd, nfaVSCallback);
 
   if (status == NFA_STATUS_OK) {
-    gNfaVsCommand.wait();
+    if (!gNfaVsCommand.wait(1000)) {
+      LOG(ERROR) << StringPrintf(
+          "%s: Timed out waiting for a response to get observe mode ",
+          __FUNCTION__);
+      gVSCmdStatus = NFA_STATUS_FAILED;
+    }
   } else {
     LOG(DEBUG) << StringPrintf("%s: Failed to get observe mode ", __FUNCTION__);
   }
@@ -1111,7 +1116,12 @@ static jboolean nfcManager_setObserveMode(JNIEnv* e, jobject, jboolean enable) {
   tNFA_STATUS status = NFA_SendRawVsCommand(sizeof(cmd), cmd, nfaVSCallback);
 
   if (status == NFA_STATUS_OK) {
-    gNfaVsCommand.wait();
+    if (!gNfaVsCommand.wait(1000)) {
+      LOG(ERROR) << StringPrintf(
+          "%s: Timed out waiting for a response to set observe mode ",
+          __FUNCTION__);
+      gVSCmdStatus = NFA_STATUS_FAILED;
+    }
   } else {
     LOG(DEBUG) << StringPrintf("%s: Failed to set observe mode ", __FUNCTION__);
     gVSCmdStatus = NFA_STATUS_FAILED;
