@@ -267,7 +267,7 @@ public class RegisteredAidCache {
     @FlaggedApi(android.nfc.Flags.FLAG_NFC_READ_POLLING_LOOP)
     ApduServiceInfo resolvePollingLoopFilterConflict(List<ApduServiceInfo> conflictingServices) {
         ApduServiceInfo matchedForeground = null;
-        ApduServiceInfo matchedRoleHolder = null;
+        List<ApduServiceInfo> roleHolderServices = new ArrayList<>();
         ApduServiceInfo matchedPayment = null;
         for (ApduServiceInfo serviceInfo : conflictingServices) {
             int userId = UserHandle.getUserHandleForUid(serviceInfo.getUid())
@@ -280,7 +280,7 @@ public class RegisteredAidCache {
             } else if(mWalletRoleObserver.isWalletRoleFeatureEnabled()) {
                 if (userId == mUserIdDefaultWalletHolder &&
                         componentName.getPackageName().equals(mDefaultWalletHolderPackageName)) {
-                    matchedRoleHolder = serviceInfo;
+                    roleHolderServices.add(serviceInfo);
                 }
             } else if (componentName.equals(mPreferredPaymentService) &&
                     userId == mUserIdPreferredPaymentService) {
@@ -291,7 +291,10 @@ public class RegisteredAidCache {
             return matchedForeground;
         }
         if (mWalletRoleObserver.isWalletRoleFeatureEnabled()) {
-            return matchedRoleHolder;
+            roleHolderServices.sort((o1, o2) ->
+                    String.CASE_INSENSITIVE_ORDER.compare(o1.getComponent().toShortString(),
+                            o2.getComponent().toShortString()));
+            return roleHolderServices.isEmpty() ? null : roleHolderServices.get(0);
         }
         return matchedPayment;
     }
