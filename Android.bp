@@ -1,12 +1,13 @@
 package {
+    default_team: "trendy_team_fwk_nfc",
     default_applicable_licenses: ["Android-Apache-2.0"],
 }
 
 genrule {
     name: "statslog-Nfc-java-gen",
     tools: ["stats-log-api-gen"],
-    cmd: "$(location stats-log-api-gen) --java $(out) --module nfc --javaPackage com.android.nfc"
-        + " --javaClass NfcStatsLog",
+    cmd: "$(location stats-log-api-gen) --java $(out) --module nfc --javaPackage com.android.nfc" +
+        " --javaClass NfcStatsLog",
     out: ["com/android/nfc/NfcStatsLog.java"],
 }
 
@@ -101,11 +102,11 @@ android_app {
         "android.nfc.flags-aconfig-java",
         "android.permission.flags-aconfig-java",
         "android.service.chooser.flags-aconfig-java",
-        "unsupportedappusage"
+        "unsupportedappusage",
     ],
     apex_available: [
         "//apex_available:platform",
-        "com.android.nfcservices"
+        "com.android.nfcservices",
     ],
     lint: {
         baseline_filename: "lint-baseline.xml",
