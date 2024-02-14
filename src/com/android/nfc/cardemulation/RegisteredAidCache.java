@@ -376,6 +376,9 @@ public class RegisteredAidCache {
                     if (DBG) Log.d(TAG, "Prioritizing default wallet services.");
                     defaultWalletServices.add(serviceAidInfo.service);
                 }
+                if (serviceClaimsPaymentAid) {
+                    resolveInfo.category = CardEmulation.CATEGORY_PAYMENT;
+                }
                 resolveInfo.services.add(serviceAidInfo.service);
             } else if (componentName.equals(mPreferredPaymentService) &&
                     userId == mUserIdPreferredPaymentService &&

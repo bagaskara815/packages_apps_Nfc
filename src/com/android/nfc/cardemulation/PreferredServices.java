@@ -185,9 +185,9 @@ public class PreferredServices implements com.android.nfc.ForegroundUtils.Callba
         ComponentName candidate = !roleHolderPaymentServices.isEmpty()
                 ? roleHolderPaymentServices.get(0) : null;
         if (!Objects.equals(candidate, mDefaultWalletHolderPaymentService)) {
-            mDefaultWalletHolderPaymentService = candidate;
-            mCallback.onPreferredPaymentServiceChanged(userId, mDefaultWalletHolderPaymentService);
+            mCallback.onPreferredPaymentServiceChanged(userId, candidate);
         }
+        mDefaultWalletHolderPaymentService = candidate;
     }
 
     void loadDefaultsFromSettings(int userId, boolean force) {
