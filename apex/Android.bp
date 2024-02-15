@@ -13,6 +13,7 @@
 // limitations under the License.
 
 package {
+    default_team: "trendy_team_fwk_nfc",
     default_applicable_licenses: ["Android-Apache-2.0"],
 }
 
@@ -44,12 +45,12 @@ custom_apex {
     manifest: "manifest.json",
     apps: ["NfcNciApex"],
     multilib: {
-       first: {
-           // Extractor process runs only with the primary ABI.
-           jni_libs: [
-               "libnfc_nci_jni",
-           ],
-       },
+        first: {
+            // Extractor process runs only with the primary ABI.
+            jni_libs: [
+                "libnfc_nci_jni",
+            ],
+        },
     },
     soong_config_variables: {
         nfc_apex_bootclasspath_fragment: {
