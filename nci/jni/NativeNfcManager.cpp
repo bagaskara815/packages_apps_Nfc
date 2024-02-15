@@ -1128,16 +1128,22 @@ static jboolean nfcManager_setObserveMode(JNIEnv* e, jobject o,
     LOG(DEBUG) << StringPrintf("%s: Failed to set observe mode ", __FUNCTION__);
     gVSCmdStatus = NFA_STATUS_FAILED;
   }
-  if (gVSCmdStatus == NFA_STATUS_OK) {
-    gObserveModeEnabled = enable;
-  }
+
   if (reenbleDiscovery) {
     startRfDiscovery(true);
   }
-  LOG(DEBUG)
-      << StringPrintf("%s: Set observe mode to %s with result %x", __FUNCTION__,
-                      (enable != JNI_FALSE ? "TRUE" : "FALSE"), gVSCmdStatus);
-  return gVSCmdStatus == NFA_STATUS_OK;
+
+  if (gVSCmdStatus == NFA_STATUS_OK) {
+    gObserveModeEnabled = enable;
+  } else {
+    gObserveModeEnabled = nfcManager_isObserveModeEnabled(e, o);
+  }
+
+  LOG(DEBUG) << StringPrintf(
+      "%s: Set observe mode to %s with result %x, observe mode is now %s.",
+      __FUNCTION__, (enable != JNI_FALSE ? "TRUE" : "FALSE"), gVSCmdStatus,
+      (gObserveModeEnabled ? "enabled" : "disabled"));
+  return gObserveModeEnabled == enable;
 }
 
 /*******************************************************************************
