@@ -1060,7 +1060,18 @@ void static nfaVSCallback(uint8_t event, uint16_t param_len, uint8_t* p_param) {
   }
 }
 
-static jboolean nfcManager_isObserveModeEnabled(JNIEnv* e, jobject) {
+static jboolean isObserveModeSupported(JNIEnv* e, jobject o) {
+  ScopedLocalRef<jclass> cls(e, e->GetObjectClass(o));
+  jmethodID isSupported =
+      e->GetMethodID(cls.get(), "isObserveModeSupported", "()Z");
+  return e->CallBooleanMethod(o, isSupported);
+}
+
+static jboolean nfcManager_isObserveModeEnabled(JNIEnv* e, jobject o) {
+  if (isObserveModeSupported(e, o) == JNI_FALSE) {
+    return false;
+  }
+
   LOG(DEBUG) << StringPrintf(
       "%s: returning %s", __FUNCTION__,
       (gObserveModeEnabled != JNI_FALSE ? "TRUE" : "FALSE"));
@@ -1078,9 +1089,14 @@ static void nfaSendRawVsCmdCallback(uint8_t event, uint16_t param_len,
   gNfaVsCommand.notifyOne();
 }
 
-static jboolean nfcManager_setObserveMode(JNIEnv* e, jobject, jboolean enable) {
+static jboolean nfcManager_setObserveMode(JNIEnv* e, jobject o,
+                                          jboolean enable) {
+  if (isObserveModeSupported(e, o) == JNI_FALSE) {
+    return false;
+  }
+
   if ((enable != JNI_FALSE) ==
-      (nfcManager_isObserveModeEnabled(e, NULL) != JNI_FALSE)) {
+      (nfcManager_isObserveModeEnabled(e, o) != JNI_FALSE)) {
     LOG(DEBUG) << StringPrintf(
         "%s: called with %s but it is already %s, returning early",
         __FUNCTION__, (enable != JNI_FALSE ? "TRUE" : "FALSE"),
@@ -1112,16 +1128,22 @@ static jboolean nfcManager_setObserveMode(JNIEnv* e, jobject, jboolean enable) {
     LOG(DEBUG) << StringPrintf("%s: Failed to set observe mode ", __FUNCTION__);
     gVSCmdStatus = NFA_STATUS_FAILED;
   }
-  if (gVSCmdStatus == NFA_STATUS_OK) {
-    gObserveModeEnabled = enable;
-  }
+
   if (reenbleDiscovery) {
     startRfDiscovery(true);
   }
-  LOG(DEBUG)
-      << StringPrintf("%s: Set observe mode to %s with result %x", __FUNCTION__,
-                      (enable != JNI_FALSE ? "TRUE" : "FALSE"), gVSCmdStatus);
-  return gVSCmdStatus == NFA_STATUS_OK;
+
+  if (gVSCmdStatus == NFA_STATUS_OK) {
+    gObserveModeEnabled = enable;
+  } else {
+    gObserveModeEnabled = nfcManager_isObserveModeEnabled(e, o);
+  }
+
+  LOG(DEBUG) << StringPrintf(
+      "%s: Set observe mode to %s with result %x, observe mode is now %s.",
+      __FUNCTION__, (enable != JNI_FALSE ? "TRUE" : "FALSE"), gVSCmdStatus,
+      (gObserveModeEnabled ? "enabled" : "disabled"));
+  return gObserveModeEnabled == enable;
 }
 
 /*******************************************************************************
