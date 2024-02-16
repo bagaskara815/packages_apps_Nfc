@@ -1008,7 +1008,7 @@ void static nfaVSCallback(uint8_t event, uint16_t param_len, uint8_t* p_param) {
     case NCI_MSG_PROP_ANDROID: {
       uint8_t android_sub_opcode = p_param[3];
       switch (android_sub_opcode) {
-        case NCI_ANDROID_PASSIVE_OBSERVER: {
+        case NCI_ANDROID_PASSIVE_OBSERVE: {
           gVSCmdStatus = p_param[4];
           LOG(INFO) << StringPrintf("Observe mode RSP: status: %x",
                                     gVSCmdStatus);
@@ -1071,7 +1071,6 @@ static jboolean nfcManager_isObserveModeEnabled(JNIEnv* e, jobject o) {
   if (isObserveModeSupported(e, o) == JNI_FALSE) {
     return false;
   }
-
   LOG(DEBUG) << StringPrintf(
       "%s: returning %s", __FUNCTION__,
       (gObserveModeEnabled != JNI_FALSE ? "TRUE" : "FALSE"));
@@ -1110,10 +1109,10 @@ static jboolean nfcManager_setObserveMode(JNIEnv* e, jobject o,
   }
   uint8_t cmd[] = {
       (NCI_MT_CMD << NCI_MT_SHIFT) | NCI_GID_PROP, NCI_MSG_PROP_ANDROID,
-      NCI_ANDROID_PASSIVE_OBSERVER_PARAM_SIZE, NCI_ANDROID_PASSIVE_OBSERVER,
+      NCI_ANDROID_PASSIVE_OBSERVE_PARAM_SIZE, NCI_ANDROID_PASSIVE_OBSERVE,
       static_cast<uint8_t>(enable != JNI_FALSE
-                               ? NCI_ANDROID_PASSIVE_OBSERVER_PARAM_ENABLE
-                               : NCI_ANDROID_PASSIVE_OBSERVER_PARAM_DISABLE)};
+                               ? NCI_ANDROID_PASSIVE_OBSERVE_PARAM_ENABLE
+                               : NCI_ANDROID_PASSIVE_OBSERVE_PARAM_DISABLE)};
 
   tNFA_STATUS status = NFA_SendRawVsCommand(sizeof(cmd), cmd, nfaVSCallback);
 
