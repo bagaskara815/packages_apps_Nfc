@@ -49,6 +49,7 @@ import android.os.Handler;
 import android.os.Message;
 import android.os.Messenger;
 import android.os.Process;
+import android.os.SystemProperties;
 import android.os.UserHandle;
 import android.os.UserManager;
 import android.sysprop.NfcProperties;
@@ -1091,6 +1092,11 @@ class NfcDispatcher {
         return enabled;
     }
 
+    private boolean isTablet() {
+        return Arrays.asList(SystemProperties.get("ro.build.characteristics").split(","))
+                .contains("tablet");
+    }
+
     boolean showWebLinkConfirmation(DispatchInfo dispatch) {
         if (!mContext.getResources().getBoolean(R.bool.enable_nfc_url_open_dialog)) {
             return dispatch.tryStartActivity();
@@ -1100,7 +1106,9 @@ class NfcDispatcher {
                 R.style.DialogAlertDayNight);
         builder.setTitle(R.string.title_confirm_url_open);
         LayoutInflater inflater = LayoutInflater.from(mContext);
-        View view = inflater.inflate(R.layout.url_open_confirmation, null);
+        View view = inflater.inflate(
+            isTablet() ? R.layout.url_open_confirmation_tablet : R.layout.url_open_confirmation,
+            null);
         if (view != null) {
             TextView url = view.findViewById(R.id.url_open_confirmation_link);
             if (url != null) {
