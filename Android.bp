@@ -104,6 +104,8 @@ android_app {
         "android.service.chooser.flags-aconfig-java",
         "unsupportedappusage",
     ],
+    // prevent NfcNciApex from using product-specific resources
+    aaptflags: ["--product default"],
     apex_available: [
         "//apex_available:platform",
         "com.android.nfcservices",
