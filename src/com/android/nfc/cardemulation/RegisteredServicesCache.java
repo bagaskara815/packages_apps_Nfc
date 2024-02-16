@@ -105,7 +105,7 @@ public class RegisteredServicesCache {
         public final int uid;
         public final HashMap<String, AidGroup> aidGroups = new HashMap<>();
         public String offHostSE;
-        public boolean defaultToObserveMode = false;
+        public String defaultToObserveModeStr;
 
         DynamicSettings(int uid) {
             this.uid = uid;
@@ -403,6 +403,11 @@ public class RegisteredServicesCache {
                     if (dynamicSettings.offHostSE != null) {
                         serviceInfo.setOffHostSecureElement(dynamicSettings.offHostSE);
                     }
+                    if (dynamicSettings.defaultToObserveModeStr != null) {
+                        serviceInfo.setDefaultToObserveMode(
+                                convertValueToBoolean(dynamicSettings.defaultToObserveModeStr,
+                                false));
+                    }
                 }
             }
             if (toBeRemoved.size() > 0) {
@@ -517,7 +522,7 @@ public class RegisteredServicesCache {
                 ComponentName currentComponent = null;
                 int currentUid = -1;
                 String currentOffHostSE = null;
-                boolean defaultToObserveMode = false;
+                String defaultToObserveModeStr = null;
                 ArrayList<AidGroup> currentGroups = new ArrayList<AidGroup>();
                 while (eventType != XmlPullParser.END_DOCUMENT) {
                     tagName = parser.getName();
@@ -526,7 +531,7 @@ public class RegisteredServicesCache {
                             String compString = parser.getAttributeValue(null, "component");
                             String uidString = parser.getAttributeValue(null, "uid");
                             String offHostString = parser.getAttributeValue(null, "offHostSE");
-                            String defaultToObserveModeStr =
+                            defaultToObserveModeStr =
                                 parser.getAttributeValue(null, "defaultToObserveMode");
                             if (compString == null || uidString == null) {
                                 Log.e(TAG, "Invalid service attributes");
@@ -536,8 +541,6 @@ public class RegisteredServicesCache {
                                     currentComponent = ComponentName.unflattenFromString(compString);
                                     currentOffHostSE = offHostString;
                                     inService = true;
-                                    defaultToObserveMode =
-                                        convertValueToBoolean(defaultToObserveModeStr, false);
                                 } catch (NumberFormatException e) {
                                     Log.e(TAG, "Could not parse service uid");
                                 }
@@ -563,7 +566,7 @@ public class RegisteredServicesCache {
                                     dynSettings.aidGroups.put(group.getCategory(), group);
                                 }
                                 dynSettings.offHostSE = currentOffHostSE;
-                                dynSettings.defaultToObserveMode = defaultToObserveMode;
+                                dynSettings.defaultToObserveModeStr = defaultToObserveModeStr;
                                 UserServices services = findOrCreateUserLocked(userId);
                                 services.dynamicSettings.put(currentComponent, dynSettings);
                             }
@@ -687,7 +690,7 @@ public class RegisteredServicesCache {
                         out.attribute(null, "offHostSE", service.getValue().offHostSE);
                     }
                     out.attribute(null,"defaultToObserveMode",
-                        Boolean.toString(service.getValue().defaultToObserveMode));
+                        service.getValue().defaultToObserveModeStr);
                     for (AidGroup group : service.getValue().aidGroups.values()) {
                         group.writeAsXml(out);
                     }
@@ -869,13 +872,14 @@ public class RegisteredServicesCache {
                 Log.e(TAG, "UID mismatch.");
                 return false;
             }
+            serviceInfo.setDefaultToObserveMode(enable);
             DynamicSettings dynSettings = services.dynamicSettings.get(componentName);
             if (dynSettings == null) {
                 dynSettings = new DynamicSettings(uid);
                 dynSettings.offHostSE = null;
                 services.dynamicSettings.put(componentName, dynSettings);
             }
-            dynSettings.defaultToObserveMode = enable;
+            dynSettings.defaultToObserveModeStr =  Boolean.toString(enable);
         }
         return true;
     }
@@ -1062,8 +1066,12 @@ public class RegisteredServicesCache {
 
     boolean doesServiceDefaultToObserveMode(int userId, ComponentName service) {
         UserServices services = findOrCreateUserLocked(userId);
-        DynamicSettings dynSettings = services.dynamicSettings.get(service);
-        return dynSettings != null && dynSettings.defaultToObserveMode;
+        ApduServiceInfo serviceInfo = services.services.get(service);
+        if (serviceInfo == null) {
+            Log.d(TAG, "serviceInfo is null");
+            return false;
+        }
+        return serviceInfo.defaultToObserveMode();
     }
 
     private boolean updateOtherServiceStatus(int userId, ApduServiceInfo service, boolean checked) {

@@ -34,6 +34,7 @@ import android.nfc.cardemulation.CardEmulation;
 import android.nfc.cardemulation.NfcFServiceInfo;
 import android.os.Binder;
 import android.os.Bundle;
+import android.os.Looper;
 import android.os.PowerManager;
 import android.os.Process;
 import android.os.RemoteException;
@@ -127,7 +128,8 @@ public class CardEmulationManager implements RegisteredServicesCache.Callback,
                 context.getSystemService(RoleManager.class), this);
         mAidCache = new RegisteredAidCache(context, mWalletRoleObserver);
         mT3tIdentifiersCache = new RegisteredT3tIdentifiersCache(context);
-        mHostEmulationManager = new HostEmulationManager(context, mAidCache);
+        mHostEmulationManager =
+                new HostEmulationManager(context, Looper.getMainLooper(), mAidCache);
         mHostNfcFEmulationManager = new HostNfcFEmulationManager(context, mT3tIdentifiersCache);
         mServiceCache = new RegisteredServicesCache(context, this);
         mNfcFServicesCache = new RegisteredNfcFServicesCache(context, this);
@@ -942,37 +944,42 @@ public class CardEmulationManager implements RegisteredServicesCache.Callback,
 
     @Override
     public void onPreferredPaymentServiceChanged(int userId, ComponentName service) {
+        Log.i(TAG, "onPreferredPaymentServiceChanged");
         mAidCache.onPreferredPaymentServiceChanged(userId, service);
         mHostEmulationManager.onPreferredPaymentServiceChanged(userId, service);
 
         NfcService.getInstance().onPreferredPaymentChanged(
                 NfcAdapter.PREFERRED_PAYMENT_CHANGED);
+        updateForDefaultToObserveMode(userId);
     }
 
     @Override
     public void onPreferredForegroundServiceChanged(int userId, ComponentName service) {
+        Log.i(TAG, "onPreferredForegroundServiceChanged");
         mAidCache.onPreferredForegroundServiceChanged(userId, service);
         mHostEmulationManager.onPreferredForegroundServiceChanged(userId, service);
 
         NfcService.getInstance().onPreferredPaymentChanged(
                 NfcAdapter.PREFERRED_PAYMENT_CHANGED);
+        updateForDefaultToObserveMode(userId);
+    }
+    private void updateForDefaultToObserveMode(int userId) {
         long token = Binder.clearCallingIdentity();
         try {
             if (!android.nfc.Flags.nfcObserveMode()) {
+                Log.d(TAG, "observe mode isn't enabled");
                 return;
             }
         } finally {
             Binder.restoreCallingIdentity(token);
         }
-
-        ComponentName paymentService = getDefaultServiceForCategory(userId,
-                    CardEmulation.CATEGORY_PAYMENT, false);
         NfcAdapter adapter = NfcAdapter.getDefaultAdapter(mContext);
         if (adapter == null) {
+            Log.e(TAG, "adapter is null, returning");
             return;
         }
-        boolean allowTransaction = !(mServiceCache.doesServiceDefaultToObserveMode(userId,
-                service != null ? service : paymentService));
+        ComponentName preferredService = mAidCache.getPreferredService();
+        boolean allowTransaction = !mServiceCache.doesServiceDefaultToObserveMode(userId, preferredService);
         adapter.setTransactionAllowed(allowTransaction);
 
     }
