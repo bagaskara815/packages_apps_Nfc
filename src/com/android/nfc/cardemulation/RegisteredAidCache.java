@@ -374,24 +374,28 @@ public class RegisteredAidCache {
                 }
                 matchedForeground = serviceAidInfo.service;
             } else if(mWalletRoleObserver.isWalletRoleFeatureEnabled()) {
-                if(userId == mUserIdDefaultWalletHolder && componentName
-                                .getPackageName().equals(mDefaultWalletHolderPackageName)) {
+                if(userId == mUserIdDefaultWalletHolder
+                    && componentName.getPackageName().equals(
+                    mDefaultWalletHolderPackageName)) {
                     if (DBG) Log.d(TAG, "Prioritizing default wallet services.");
+                    resolveInfo.services.add(serviceAidInfo.service);
+                    if (serviceClaimsPaymentAid) {
+                        resolveInfo.category = CardEmulation.CATEGORY_PAYMENT;
+                    }
                     defaultWalletServices.add(serviceAidInfo.service);
+                } else {
+                    nonDefaultResolution(serviceClaimsPaymentAid, serviceAidInfo, resolveInfo);
                 }
-                if (serviceClaimsPaymentAid) {
-                    resolveInfo.category = CardEmulation.CATEGORY_PAYMENT;
-                }
-                resolveInfo.services.add(serviceAidInfo.service);
-            } else if (componentName.equals(mPreferredPaymentService) &&
-                    userId == mUserIdPreferredPaymentService &&
-                    serviceClaimsPaymentAid) {
+            } else {
+                if (componentName.equals(mPreferredPaymentService)
+                    && userId == mUserIdPreferredPaymentService && serviceClaimsPaymentAid) {
                 if (DBG) Log.d(TAG, "Prioritizing dpp services.");
                 resolveInfo.services.add(serviceAidInfo.service);
                 resolveInfo.category = CardEmulation.CATEGORY_PAYMENT;
                 matchedPayment = serviceAidInfo.service;
-            } else {
-                nonDefaultResolution(serviceClaimsPaymentAid, serviceAidInfo, resolveInfo);
+                } else {
+                    nonDefaultResolution(serviceClaimsPaymentAid, serviceAidInfo, resolveInfo);
+                }
             }
         }
         if (matchedForeground != null) {
