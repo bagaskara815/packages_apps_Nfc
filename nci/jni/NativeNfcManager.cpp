@@ -168,9 +168,11 @@ static jboolean nfcManager_doSetPowerSavingMode(JNIEnv* e, jobject o,
                                                 bool flag);
 static void sendRawVsCmdCallback(uint8_t event, uint16_t param_len,
                                  uint8_t* p_param);
+static jbyteArray nfcManager_getProprietaryCaps(JNIEnv* e, jobject o);
 tNFA_STATUS gVSCmdStatus = NFA_STATUS_OK;
 uint16_t gCurrentConfigLen;
 uint8_t gConfig[256];
+std::vector<uint8_t> gCaps(0);
 static int prevScreenState = NFA_SCREEN_STATE_OFF_LOCKED;
 static int NFA_SCREEN_POLLING_TAG_MASK = 0x10;
 static bool gIsDtaEnabled = false;
@@ -1012,6 +1014,12 @@ void static nfaVSCallback(uint8_t event, uint16_t param_len, uint8_t* p_param) {
                                     gVSCmdStatus);
           SyncEventGuard guard(gNfaVsCommand);
           gNfaVsCommand.notifyOne();
+        } break;
+        case NCI_ANDROID_GET_CAPS: {
+          gVSCmdStatus = p_param[4];
+          u_int16_t android_version = *(u_int16_t*)&p_param[5];
+          u_int8_t len = p_param[7];
+          gCaps.assign(p_param + 8, p_param + 8 + len);
         } break;
         case NCI_ANDROID_POLLING_FRAME_NTF: {
           struct nfc_jni_native_data* nat = getNative(NULL, NULL);
@@ -2316,6 +2324,8 @@ static JNINativeMethod gMethods[] = {
     {"resetDiscoveryTech", "()V", (void*)nfcManager_resetDiscoveryTech},
     {"nativeSendRawVendorCmd", "(III[B)Lcom/android/nfc/NfcVendorNciResponse;",
      (void*)nfcManager_nativeSendRawVendorCmd},
+
+    {"getProprietaryCaps", "()[B", (void*)nfcManager_getProprietaryCaps},
 };
 
 /*******************************************************************************
@@ -2528,6 +2538,26 @@ static jboolean nfcManager_doSetPowerSavingMode(JNIEnv* e, jobject o,
     gVSCmdStatus = NFA_STATUS_FAILED;
   }
   return gVSCmdStatus == NFA_STATUS_OK;
+}
+
+static jbyteArray nfcManager_getProprietaryCaps(JNIEnv* e, jobject o) {
+  LOG(DEBUG) << StringPrintf("%s: enter; ", __func__);
+  uint8_t cmd[] = {(NCI_MT_CMD << NCI_MT_SHIFT) | NCI_GID_PROP,
+                   NCI_MSG_PROP_ANDROID, 0, NCI_ANDROID_GET_CAPS};
+  SyncEventGuard guard(gNfaVsCommand);
+  tNFA_STATUS status =
+      NFA_SendRawVsCommand(sizeof(cmd), cmd, nfaSendRawVsCmdCallback);
+  if (status == NFA_STATUS_OK) {
+    gNfaVsCommand.wait();
+  } else {
+    LOG(ERROR) << StringPrintf("%s: Failed to get caps", __func__);
+    gVSCmdStatus = NFA_STATUS_FAILED;
+  }
+  CHECK(e);
+  jbyteArray rtJavaArray = e->NewByteArray(gCaps.size());
+  CHECK(rtJavaArray);
+  e->SetByteArrayRegion(rtJavaArray, 0, gCaps.size(), (jbyte*)gCaps.data());
+  return rtJavaArray;
 }
 
 } /* namespace android */
