@@ -582,13 +582,13 @@ public class CardEmulationManager implements RegisteredServicesCache.Callback,
         }
 
         @Override
-        public boolean setServiceObserveModeDefault(int userId,
+        public boolean setDefaultToObserveModeForService(int userId,
             ComponentName service, boolean enable) {
             NfcPermissions.validateUserId(userId);
             if (!isServiceRegistered(userId, service)) {
                 return false;
             }
-            return mServiceCache.setServiceObserveModeDefault(userId, Binder.getCallingUid(),
+            return mServiceCache.setDefaultToObserveModeForService(userId, Binder.getCallingUid(),
                 service, enable);
         }
 

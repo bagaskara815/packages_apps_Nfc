@@ -854,7 +854,7 @@ public class RegisteredServicesCache {
         return true;
     }
 
-    public boolean setServiceObserveModeDefault(int userId, int uid,
+    public boolean setDefaultToObserveModeForService(int userId, int uid,
             ComponentName componentName, boolean enable) {
         synchronized (mLock) {
             UserServices services = findOrCreateUserLocked(userId);
