@@ -689,8 +689,10 @@ public class RegisteredServicesCache {
                     if(service.getValue().offHostSE != null) {
                         out.attribute(null, "offHostSE", service.getValue().offHostSE);
                     }
-                    out.attribute(null,"defaultToObserveMode",
-                        service.getValue().defaultToObserveModeStr);
+                    if (service.getValue().defaultToObserveModeStr != null) {
+                        out.attribute(null, "defaultToObserveMode",
+                                service.getValue().defaultToObserveModeStr);
+                    }
                     for (AidGroup group : service.getValue().aidGroups.values()) {
                         group.writeAsXml(out);
                     }
