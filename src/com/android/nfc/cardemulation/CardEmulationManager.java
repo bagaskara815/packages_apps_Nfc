@@ -979,8 +979,9 @@ public class CardEmulationManager implements RegisteredServicesCache.Callback,
             return;
         }
         ComponentName preferredService = mAidCache.getPreferredService();
-        boolean allowTransaction = !mServiceCache.doesServiceDefaultToObserveMode(userId, preferredService);
-        adapter.setTransactionAllowed(allowTransaction);
+        boolean enableObserveMode = mServiceCache.doesServiceDefaultToObserveMode(userId,
+                preferredService);
+        adapter.setObserveModeEnabled(enableObserveMode);
 
     }
 

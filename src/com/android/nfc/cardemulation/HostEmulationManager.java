@@ -281,7 +281,7 @@ public class HostEmulationManager {
         Log.d(TAG, "disabling observe mode for one transaction.");
         mEnableObserveModeAfterTransaction = true;
         NfcAdapter adapter = NfcAdapter.getDefaultAdapter(mContext);
-        adapter.setTransactionAllowed(true);
+        adapter.setObserveModeEnabled(false);
     }
 
     /**
@@ -494,7 +494,7 @@ public class HostEmulationManager {
                 Log.d(TAG, "re-enabling observe mode after HCE deactivation");
                 mEnableObserveModeAfterTransaction = false;
                 NfcAdapter adapter = NfcAdapter.getDefaultAdapter(mContext);
-                adapter.setTransactionAllowed(false);
+                adapter.setObserveModeEnabled(true);
             }
 
             if (mStatsdUtils != null) {
