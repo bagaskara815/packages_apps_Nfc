@@ -889,7 +889,8 @@ public class RegisteredServicesCache {
     @TargetApi(35)
     @FlaggedApi(android.nfc.Flags.FLAG_NFC_READ_POLLING_LOOP)
     public boolean registerPollingLoopFilterForService(int userId, int uid,
-            ComponentName componentName, String pollingLoopFilter) {
+            ComponentName componentName, String pollingLoopFilter,
+            boolean autoTransact) {
         ArrayList<ApduServiceInfo> newServices = null;
         synchronized (mLock) {
             UserServices services = findOrCreateUserLocked(userId);
@@ -907,11 +908,7 @@ public class RegisteredServicesCache {
                 Log.e(TAG, "UID mismatch.");
                 return false;
             }
-            if (!CardEmulation.isValidPollingLoopFilter(pollingLoopFilter)) {
-                Log.e(TAG, "invalid polling loop filter");
-                return false;
-            }
-            serviceInfo.addPollingLoopFilter(pollingLoopFilter);
+            serviceInfo.addPollingLoopFilter(pollingLoopFilter, autoTransact);
             newServices = new ArrayList<ApduServiceInfo>(services.services.values());
         }
         mCallback.onServicesUpdated(userId, newServices, true);
