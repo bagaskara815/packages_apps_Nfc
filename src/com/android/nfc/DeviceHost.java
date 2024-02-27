@@ -44,6 +44,8 @@ public interface DeviceHost {
         public void onHwErrorReported();
 
         public void onPollingLoopDetected(Bundle pollingFrame);
+
+        public void onVendorSpecificEvent(int gid, int oid, byte[] payload);
     }
 
     public interface TagEndpoint {
