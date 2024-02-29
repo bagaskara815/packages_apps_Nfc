@@ -76,7 +76,7 @@ import java.util.concurrent.atomic.AtomicReference;
 public class RegisteredServicesCache {
     static final String XML_INDENT_OUTPUT_FEATURE = "http://xmlpull.org/v1/doc/features.html#indent-output";
     static final String TAG = "RegisteredServicesCache";
-    static final boolean DEBUG = NfcProperties.debug_enabled().orElse(false);
+    static final boolean DEBUG = NfcProperties.debug_enabled().orElse(true);
 
     final Context mContext;
     final AtomicReference<BroadcastReceiver> mReceiver;

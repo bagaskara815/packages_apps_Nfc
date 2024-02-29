@@ -48,7 +48,7 @@ import java.util.TreeMap;
 public class RegisteredAidCache {
     static final String TAG = "RegisteredAidCache";
 
-    static final boolean DBG = NfcProperties.debug_enabled().orElse(false);
+    static final boolean DBG = NfcProperties.debug_enabled().orElse(true);
 
     static final int AID_ROUTE_QUAL_SUBSET = 0x20;
     static final int AID_ROUTE_QUAL_PREFIX = 0x10;

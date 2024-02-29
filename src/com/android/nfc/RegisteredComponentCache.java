@@ -46,7 +46,7 @@ import java.util.concurrent.atomic.AtomicReference;
 public class RegisteredComponentCache {
     private static final String TAG = "RegisteredComponentCache";
     private static final boolean DEBUG =
-            NfcProperties.debug_enabled().orElse(false);
+            NfcProperties.debug_enabled().orElse(true);
 
     final Context mContext;
     final String mAction;
